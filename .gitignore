@@ -1,0 +1,3 @@
+# Built programs. Attach the installer to a GitHub release instead.
+dist/
+release/*.exe
