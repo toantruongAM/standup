@@ -1,0 +1,77 @@
+:root {
+  color-scheme: light dark;
+  --surface: #fcfcfb;
+  --page: #f2f1ee;
+  --text: #0b0b0b;
+  --muted: #52514e;
+  --grid: #e6e5e0;
+  --baseline: #b9b8b1;
+  --hover: #efeeea;
+  --bar: #2a78d6;
+  --accent: #2a78d6;
+  --error: #b3261e;
+  --control: #ffffff;
+  --border: #c9c8c1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #1a1a19;
+    --page: #111110;
+    --text: #f0efec;
+    --muted: #c3c2b7;
+    --grid: #30302d;
+    --baseline: #5b5a55;
+    --hover: #2a2a27;
+    --bar: #3987e5;
+    --accent: #3987e5;
+    --error: #f2857c;
+    --control: #262624;
+    --border: #45443f;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 18px;
+  background: var(--page);
+  color: var(--text);
+  font: 13px -apple-system, "Segoe UI", sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+h1 { font-size: 15px; margin: 0 0 12px; }
+p { margin: 0 0 12px; line-height: 1.4; }
+label.row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+
+input[type="number"], input[type="password"] {
+  background: var(--control);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font: inherit;
+}
+input[type="number"] { width: 84px; }
+input[type="password"] { width: 100%; margin-bottom: 10px; }
+input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+
+button {
+  background: var(--control);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font: inherit;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.error { color: var(--error); min-height: 18px; margin: 0 0 4px; }
+.section { margin-top: 16px; }
+.link { background: none; border: none; color: var(--accent); padding: 0; text-decoration: underline; }

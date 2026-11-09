@@ -1,0 +1,25 @@
+[package]
+name = "standup"
+version = "1.0.0"
+description = "Makes you stand up and walk"
+edition = "2021"
+rust-version = "1.77"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+chrono = "0.4"
+pbkdf2 = "0.12"
+sha2 = "0.10"
+rand = "0.8"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

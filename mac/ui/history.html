@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>StandUp history</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+  header div { display: flex; gap: 6px; }
+  #content { background: var(--surface); height: 430px; position: relative; overflow: auto; }
+  svg { display: block; }
+  .title { font-size: 13px; font-weight: 600; fill: var(--text); }
+  .note, .tick { font-size: 11px; fill: var(--muted); }
+  #tip { position: absolute; display: none; background: var(--control); border: 1px solid var(--baseline); padding: 7px 9px; pointer-events: none; font-size: 12px; line-height: 1.5; color: var(--muted); white-space: nowrap; }
+  #tip b { color: var(--text); display: block; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 4px 10px; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  th { position: sticky; top: 0; background: var(--surface); border-bottom: 1px solid var(--baseline); font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <div id="views">
+    <button data-view="breaks" class="on">Breaks</button>
+    <button data-view="snoozes">Snoozes</button>
+    <button data-view="raw">Raw data</button>
+  </div>
+  <div id="ranges">
+    <button data-days="14" class="on">14 days</button>
+    <button data-days="30">30 days</button>
+    <button data-days="90">90 days</button>
+  </div>
+</header>
+<div id="content"></div>
+<script src="history.js"></script>
+</body>
+</html>

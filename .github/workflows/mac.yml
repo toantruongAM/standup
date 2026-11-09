@@ -1,0 +1,48 @@
+name: Build Mac app
+
+on:
+  push:
+    paths:
+      - "mac/**"
+      - "art/photos/**"
+      - ".github/workflows/mac.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            mac/src-tauri/target
+          key: mac-${{ runner.os }}-${{ hashFiles('mac/src-tauri/Cargo.toml') }}
+
+      - name: Test the break rules
+        working-directory: mac/src-tauri
+        run: cargo test
+
+      - name: Install the Tauri build tool
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Build a universal Mac app
+        working-directory: mac/src-tauri
+        run: cargo tauri build --target universal-apple-darwin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StandUp-mac
+          path: mac/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error

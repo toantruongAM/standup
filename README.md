@@ -2,6 +2,8 @@
 
 A Windows tray app that makes you stop working, stand up and walk. It needs nothing installed beyond Windows itself.
 
+Looking for the Mac version? See [mac/README.md](mac/README.md).
+
 ## Start it
 
 Put `dist\StandUp.exe` somewhere permanent and double-click it. It asks you to choose a passcode, then runs in the tray.

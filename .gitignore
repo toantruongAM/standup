@@ -1,3 +1,7 @@
 # Built programs. Attach the installer to a GitHub release instead.
 dist/
 release/*.exe
+
+# Mac build output
+mac/src-tauri/target/
+mac/src-tauri/gen/

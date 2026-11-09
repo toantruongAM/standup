@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>StandUp break</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #101418; color: #f2f4f7; cursor: default; -webkit-user-select: none; user-select: none; font-family: -apple-system, "Segoe UI", sans-serif; }
+  main { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  h1 { font-size: 5vh; font-weight: 600; margin: 2.5vh 0 1.5vh; }
+  img { flex: 0 1 61vh; min-height: 0; max-width: 80vw; object-fit: contain; }
+  #clock { font-size: 11.5vh; font-weight: 600; color: #ffc857; line-height: 1.15; font-variant-numeric: tabular-nums; }
+  #status { font-size: max(13px, 1.75vh); color: #8e98a4; margin-top: .5vh; }
+  #status.warn { color: #ff7a59; }
+  #hint { font-size: max(13px, 1.75vh); color: #8e98a4; margin: 1vh 0 4vh; }
+  #snooze { position: fixed; bottom: 1.2vh; background: none; border: none; padding: 2px 4px; color: #525c68; font: inherit; font-size: max(12px, 1.3vh); cursor: pointer; }
+  #snooze:hover { color: #bec6d0; }
+  body.secondary #clock { font-size: 24vh; }
+  body.secondary img, body.secondary #hint, body.secondary #snooze { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="headline">Time to get up and walk.</h1>
+  <img id="photo" alt="A funny picture to get you moving">
+  <div id="clock">&nbsp;</div>
+  <div id="status">Any key or mouse movement restarts the timer.</div>
+  <div id="hint">Press Control+Command+Q to lock your Mac and walk away. The break keeps counting.</div>
+</main>
+<button id="snooze" hidden>snooze</button>
+<script src="overlay.js"></script>
+</body>
+</html>
