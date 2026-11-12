@@ -64,6 +64,43 @@ namespace StandUp
             };
         }
 
+        /// <summary>An input with a "saved" check mark after it, as one cell.</summary>
+        public static FlowLayoutPanel WithMark(Control input, out SavedMark mark)
+        {
+            var cell = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
+            mark = new SavedMark();
+            cell.Controls.Add(input);
+            cell.Controls.Add(mark);
+            return cell;
+        }
+
+        /// <summary>
+        /// Numbers save on an arrow click, Enter, leaving the box, or a short pause in typing.
+        /// The timer only takes the new times when the Settings window closes, so a passing
+        /// "4" on the way to "45" never starts a break.
+        /// </summary>
+        public static void OnCommit(NumericUpDown box, Action<decimal> commit)
+        {
+            var pause = new Timer { Interval = 700 };
+            pause.Tick += delegate
+            {
+                pause.Stop();
+                decimal typed;
+                if (decimal.TryParse(box.Text, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.CurrentCulture, out typed)
+                    && typed >= box.Minimum && typed <= box.Maximum)
+                    commit(typed);
+            };
+            box.TextChanged += delegate { pause.Stop(); pause.Start(); };
+            box.Disposed += delegate { pause.Dispose(); };
+            box.ValueChanged += delegate { commit(box.Value); };
+            box.KeyDown += (sender, e) =>
+            {
+                if (e.KeyCode != Keys.Enter) return;
+                commit(box.Value);   // reading Value checks what was typed
+                e.SuppressKeyPress = true;
+            };
+        }
+
         public static FlowLayoutPanel Buttons(Form form, string okText, bool canCancel)
         {
             var panel = new FlowLayoutPanel
@@ -83,6 +120,56 @@ namespace StandUp
             }
             panel.Controls.Add(ok);
             return panel;
+        }
+    }
+
+    /// <summary>A green check that appears when a value is saved, stays a moment, then fades away.</summary>
+    sealed class SavedMark : Label
+    {
+        public const int HoldMs = 1500, FadeMs = 1000;
+        static readonly Color Green = Color.FromArgb(22, 163, 74);
+        readonly Timer _timer = new Timer { Interval = 30 };
+        readonly Stopwatch _clock = new Stopwatch();
+
+        public SavedMark()
+        {
+            Text = "✔";
+            AutoSize = true;
+            Font = new Font("Segoe UI Symbol", SystemFonts.MessageBoxFont.SizeInPoints * 1.2f);
+            Margin = new Padding(6, 4, 0, 0);
+            ForeColor = BackColor;   // takes up its space even while hidden, so nothing shifts
+            _timer.Tick += delegate { Step(); };
+        }
+
+        /// <summary>True from the moment a save is shown until it has faded out.</summary>
+        public bool IsLit { get { return _clock.IsRunning; } }
+
+        public void Flash()
+        {
+            ForeColor = Green;
+            _clock.Restart();
+            _timer.Start();
+        }
+
+        void Step()
+        {
+            long ms = _clock.ElapsedMilliseconds;
+            if (ms < HoldMs) return;
+            float k = Math.Min(1f, (ms - HoldMs) / (float)FadeMs);
+            Color to = BackColor;
+            ForeColor = Color.FromArgb(
+                (int)(Green.R + (to.R - Green.R) * k),
+                (int)(Green.G + (to.G - Green.G) * k),
+                (int)(Green.B + (to.B - Green.B) * k));
+            if (k < 1f) return;
+            _timer.Stop();
+            _clock.Reset();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _timer.Dispose();
+            base.Dispose(disposing);
         }
     }
 
@@ -167,31 +254,48 @@ namespace StandUp
     sealed class SettingsForm : Form
     {
         readonly AppSettings _settings;
-        public SettingsForm(AppSettings settings)
+        readonly NumericUpDown[] _numbers;
+
+        /// <param name="reopenAdvanced">Open Advanced settings straight away (after a language change rebuilt this window).</param>
+        public SettingsForm(AppSettings settings, bool reopenAdvanced = false)
         {
             _settings = settings;
             Ui.Dialog(this, L10n.T("settings.title"));
+            KeyPreview = true;
+            KeyDown += (sender, e) => { if (e.KeyCode == Keys.Escape) Close(); };
             TableLayoutPanel grid = Ui.Grid(2);
 
+            // Every change saves at once and shows a check mark; there is no Save button.
             NumericUpDown shortEvery = Ui.Minutes(settings.WorkMinutes, 1, 480, 0);
             NumericUpDown shortLength = Ui.Minutes(settings.BreakMinutes, 0.5m, 60, 1);
             NumericUpDown longEvery = Ui.Minutes(settings.LongEveryMinutes, 1, 480, 0);
             NumericUpDown longLength = Ui.Minutes(settings.LongBreakMinutes, 0.5m, 60, 1);
             NumericUpDown snooze = Ui.Minutes(settings.SnoozeMinutes, 0.5m, 60, 1);
+            _numbers = new[] { shortEvery, shortLength, longEvery, longLength, snooze };
 
             // Three groups, each with a bold heading and a rule above it, so they're easy to tell apart.
             Group(grid, L10n.T("settings.shortGroup"), false);
-            Row(grid, L10n.T("settings.every"), shortEvery);
-            Row(grid, L10n.T("settings.length"), shortLength);
+            Row(grid, L10n.T("settings.every"), shortEvery, () => settings.WorkMinutes, v => settings.WorkMinutes = v);
+            Row(grid, L10n.T("settings.length"), shortLength, () => settings.BreakMinutes, v => settings.BreakMinutes = v);
             Group(grid, L10n.T("settings.longGroup"), true);
-            Row(grid, L10n.T("settings.every"), longEvery);
-            Row(grid, L10n.T("settings.length"), longLength);
+            Row(grid, L10n.T("settings.every"), longEvery, () => settings.LongEveryMinutes, v => settings.LongEveryMinutes = v);
+            Row(grid, L10n.T("settings.length"), longLength, () => settings.LongBreakMinutes, v => settings.LongBreakMinutes = v);
             Group(grid, L10n.T("settings.snoozeGroup"), true);
-            Row(grid, L10n.T("settings.length"), snooze);
+            Row(grid, L10n.T("settings.length"), snooze, () => settings.SnoozeMinutes, v => settings.SnoozeMinutes = v);
             Group(grid, null, true);
 
-            var autostart = new CheckBox { Text = L10n.T("settings.autostartWindows"), AutoSize = true, Checked = settings.StartWithWindows, Margin = new Padding(3, 10, 3, 3) };
-            Ui.Span(grid, autostart);
+            var autostart = new CheckBox { Text = L10n.T("settings.autostartWindows"), AutoSize = true, Checked = settings.StartWithWindows };
+            SavedMark autostartMark;
+            FlowLayoutPanel autostartCell = Ui.WithMark(autostart, out autostartMark);
+            autostartCell.Margin = new Padding(0, 10, 0, 3);
+            Ui.Span(grid, autostartCell);
+            autostart.CheckedChanged += delegate
+            {
+                settings.StartWithWindows = autostart.Checked;
+                settings.Save();
+                if (!Program.TestMode) AutoStart.Apply(settings.StartWithWindows, Application.ExecutablePath);
+                autostartMark.Flash();
+            };
 
             var buttonsRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
             var passcode = new Button { Text = L10n.T("settings.changePasscode"), AutoSize = true };
@@ -205,34 +309,43 @@ namespace StandUp
             buttonsRow.Controls.Add(passcode);
             buttonsRow.Controls.Add(advanced);
             Ui.Span(grid, buttonsRow);
-
-            Ui.Span(grid, Ui.Buttons(this, L10n.T("common.save"), true));
             Controls.Add(grid);
 
-            ((Button)AcceptButton).Click += delegate
-            {
-                settings.WorkMinutes = shortEvery.Value;
-                settings.BreakMinutes = shortLength.Value;
-                settings.LongEveryMinutes = longEvery.Value;
-                settings.LongBreakMinutes = longLength.Value;
-                settings.SnoozeMinutes = snooze.Value;
-                settings.StartWithWindows = autostart.Checked;
-                settings.Save();
-                DialogResult = DialogResult.OK;
-            };
+            if (reopenAdvanced) Shown += delegate { BeginInvoke(new Action(() => OpenAdvanced(true))); };
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Save a number that was typed but not yet confirmed when the window is closed.
+            foreach (NumericUpDown box in _numbers) { decimal unused = box.Value; }
+            base.OnFormClosing(e);
         }
 
         /// <summary>Set when Advanced settings switched language; Settings then closes to reopen in it.</summary>
         public bool LanguageChanged { get; private set; }
 
-        void OpenAdvanced()
+        void OpenAdvanced(bool languageJustChanged = false)
         {
-            using (var advanced = new AdvancedForm(_settings))
+            using (var advanced = new AdvancedForm(_settings, languageJustChanged))
             {
-                if (advanced.ShowDialog(this) != DialogResult.OK || !advanced.LanguageChanged) return;
+                advanced.ShowDialog(this);
+                if (!advanced.LanguageChanged) return;
             }
             LanguageChanged = true;
             DialogResult = DialogResult.Retry;
+        }
+
+        void Row(TableLayoutPanel grid, string text, NumericUpDown input, Func<decimal> current, Action<decimal> store)
+        {
+            SavedMark mark;
+            Row(grid, text, Ui.WithMark(input, out mark));
+            Ui.OnCommit(input, value =>
+            {
+                if (value == current()) return;
+                store(value);
+                _settings.Save();
+                mark.Flash();
+            });
         }
 
         /// <summary>A thin rule (unless first) and a bold heading across both columns.</summary>
@@ -274,24 +387,57 @@ namespace StandUp
     {
         readonly Label _photoStatus;
 
-        public AdvancedForm(AppSettings settings)
+        readonly NumericUpDown _idle, _snoozes;
+
+        /// <param name="languageJustChanged">Show the check mark by Language (this window was rebuilt for a new language).</param>
+        public AdvancedForm(AppSettings settings, bool languageJustChanged = false)
         {
             Ui.Dialog(this, L10n.T("advanced.title"));
+            KeyPreview = true;
+            KeyDown += (sender, e) => { if (e.KeyCode == Keys.Escape) Close(); };
             TableLayoutPanel grid = Ui.Grid(2);
 
-            NumericUpDown idle = Ui.Minutes(settings.IdleMinutes, 1, 60, 0);
+            // Every change saves at once and shows a check mark; there is no Save button.
+            SavedMark idleMark, snoozesMark, languageMark;
+            _idle = Ui.Minutes(settings.IdleMinutes, 1, 60, 0);
             grid.Controls.Add(Ui.Label(L10n.T("advanced.idle")));
-            grid.Controls.Add(idle);
+            grid.Controls.Add(Ui.WithMark(_idle, out idleMark));
+            Ui.OnCommit(_idle, value =>
+            {
+                if (value == settings.IdleMinutes) return;
+                settings.IdleMinutes = value;
+                settings.Save();
+                idleMark.Flash();
+            });
 
-            NumericUpDown snoozes = Ui.Minutes(settings.MaxSnoozes, 0, 10, 0);
+            _snoozes = Ui.Minutes(settings.MaxSnoozes, 0, 10, 0);
             grid.Controls.Add(Ui.Label(L10n.T("advanced.snoozes")));
-            grid.Controls.Add(snoozes);
+            grid.Controls.Add(Ui.WithMark(_snoozes, out snoozesMark));
+            Ui.OnCommit(_snoozes, value =>
+            {
+                if ((int)value == settings.MaxSnoozes) return;
+                settings.MaxSnoozes = (int)value;
+                settings.Save();
+                snoozesMark.Flash();
+            });
 
             var language = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140 };
             foreach (string code in L10n.Languages) language.Items.Add(L10n.NameOf(code));
             language.SelectedIndex = Math.Max(0, Array.IndexOf(L10n.Languages, settings.Language));
             grid.Controls.Add(Ui.Label(L10n.T("advanced.language")));
-            grid.Controls.Add(language);
+            grid.Controls.Add(Ui.WithMark(language, out languageMark));
+            language.SelectedIndexChanged += delegate
+            {
+                string chosen = L10n.Languages[language.SelectedIndex];
+                if (chosen == settings.Language) return;
+                settings.Language = chosen;
+                settings.Save();
+                L10n.Language = chosen;
+                // Close so Settings and this window reopen in the new language.
+                LanguageChanged = true;
+                BeginInvoke(new Action(Close));
+            };
+            if (languageJustChanged) Shown += delegate { languageMark.Flash(); };
 
             _photoStatus = new Label { AutoSize = true, Margin = new Padding(3, 16, 3, 3) };
             var addPhotos = new Button { Text = L10n.T("advanced.addPictures"), AutoSize = true };
@@ -308,21 +454,14 @@ namespace StandUp
             Ui.Span(grid, addPhotos);
             Ui.Span(grid, openPhotos);
             RefreshPhotoRow();
-
-            Ui.Span(grid, Ui.Buttons(this, L10n.T("common.save"), true));
             Controls.Add(grid);
+        }
 
-            ((Button)AcceptButton).Click += delegate
-            {
-                string chosen = L10n.Languages[language.SelectedIndex];
-                LanguageChanged = chosen != settings.Language;
-                settings.IdleMinutes = idle.Value;
-                settings.MaxSnoozes = (int)snoozes.Value;
-                settings.Language = chosen;
-                settings.Save();
-                L10n.Language = chosen;
-                DialogResult = DialogResult.OK;
-            };
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Save a number that was typed but not yet confirmed when the window is closed.
+            decimal unused = _idle.Value + _snoozes.Value;
+            base.OnFormClosing(e);
         }
 
         public bool LanguageChanged { get; private set; }

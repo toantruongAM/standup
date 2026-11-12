@@ -125,11 +125,6 @@ impl History {
         history
     }
 
-    pub fn breaks_today(&self) -> u32 {
-        let today = Local::now().format("%Y-%m-%d").to_string();
-        self.days.get(&today).map_or(0, |d| d.breaks)
-    }
-
     pub fn all(&self) -> Vec<DayStats> {
         self.days.values().cloned().collect()
     }
@@ -173,13 +168,26 @@ macro_rules! pictures {
             include_bytes!(concat!("../../../art/photos/", $lang, "/baby04.png")),
             include_bytes!(concat!("../../../art/photos/", $lang, "/babydog01.png")),
             include_bytes!(concat!("../../../art/photos/", $lang, "/babydog02.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/cat01.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/cat02.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/cat03.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/cat04.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/cat05.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/babycat01.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/baby05.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/baby06.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/dog07.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/dog08.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/hamster01.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/penguin01.png")),
         ]
     };
 }
 
-const BUILT_IN: [[&[u8]; 12]; 3] = [pictures!("en"), pictures!("es"), pictures!("vi")];
+const PICTURES: usize = 24;
+const BUILT_IN: [[&[u8]; PICTURES]; 3] = [pictures!("en"), pictures!("es"), pictures!("vi")];
 
-fn built_in_for(language: &str) -> &'static [&'static [u8]; 12] {
+fn built_in_for(language: &str) -> &'static [&'static [u8]; PICTURES] {
     match language {
         "es" => &BUILT_IN[1],
         "vi" => &BUILT_IN[2],

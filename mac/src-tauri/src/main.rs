@@ -50,8 +50,6 @@ impl Core {
 type Shared = Arc<Mutex<Core>>;
 
 struct TrayItems {
-    status: MenuItem<Wry>,
-    today: MenuItem<Wry>,
     take_break: MenuItem<Wry>,
     settings: MenuItem<Wry>,
     history: MenuItem<Wry>,
@@ -126,7 +124,6 @@ fn spawn_clock(app: AppHandle) {
 
             let lang = core.lang().to_string();
             let status = status_text(&core, now);
-            let breaks = core.history.breaks_today();
             let working = core.engine.phase == Phase::Working;
             drop(core);
 
@@ -145,13 +142,15 @@ fn spawn_clock(app: AppHandle) {
                 let _ = app.run_on_main_thread(platform::activate);
             }
 
-            let line = format!("{lang}|{status}|{breaks}|{working}");
+            // The status shows only as the icon's hover tip, not in the menu.
+            let line = format!("{lang}|{status}|{working}");
             if line != last_status {
                 last_status = line;
                 let items = app.state::<TrayItems>();
-                let _ = items.status.set_text(status);
-                let _ = items.today.set_text(i18n::f(&lang, "tray.breaksToday", &[&breaks.to_string()]));
                 let _ = items.take_break.set_enabled(working);
+                if let Some(tray) = app.tray_by_id("standup") {
+                    let _ = tray.set_tooltip(Some(format!("StandUp: {status}")));
+                }
             }
         }
     });
@@ -326,6 +325,16 @@ fn open_dialog(app: &AppHandle, label: &str, page: &str, title_key: &str, width:
         .center()
         .build();
     if let Ok(window) = built {
+        // Settings save as they change; the break timer takes them once the window closes,
+        // so stepping through values can't start a break part-way.
+        if label == "settings" || label == "advanced" {
+            let handle = app.clone();
+            window.on_window_event(move |event| {
+                if matches!(event, tauri::WindowEvent::Destroyed) {
+                    apply_settings(&handle);
+                }
+            });
+        }
         platform::activate();
         let _ = window.set_focus();
     }
@@ -458,11 +467,18 @@ fn save_settings(
     s.start_with_mac = autostart;
     let path = core.settings_path.clone();
     core.settings.save(&path).map_err(|e| e.to_string())?;
-    let config = core.settings.engine_config();
-    core.engine.apply_config(config, now_ms());
     drop(core);
+    // The timer takes the new times when the window closes (see open_dialog).
     apply_autostart(&app, autostart);
     Ok(())
+}
+
+/// Hands the saved settings to the break timer.
+fn apply_settings(app: &AppHandle) {
+    let shared = app.state::<Shared>();
+    let mut core = shared.lock().expect("core lock");
+    let config = core.settings.engine_config();
+    core.engine.apply_config(config, now_ms());
 }
 
 #[derive(Serialize)]
@@ -508,13 +524,11 @@ fn save_advanced(app: AppHandle, shared: State<'_, Shared>, idle: f64, snoozes: 
     core.settings.language = language.clone();
     let path = core.settings_path.clone();
     core.settings.save(&path).map_err(|e| e.to_string())?;
-    let config = core.settings.engine_config();
-    core.engine.apply_config(config, now_ms());
     drop(core);
 
     if changed {
         apply_tray_language(&app, &language);
-        for (label, key) in [("settings", "settings.title"), ("history", "history.title")] {
+        for (label, key) in [("settings", "settings.title"), ("advanced", "advanced.title"), ("history", "history.title")] {
             if let Some(window) = app.get_webview_window(label) {
                 let _ = window.set_title(&i18n::t(&language, key));
                 let _ = window.eval("location.reload()");
@@ -567,15 +581,12 @@ fn build_core(app: &AppHandle) -> Result<Core, Box<dyn std::error::Error>> {
 }
 
 fn build_tray(app: &AppHandle, lang: &str) -> tauri::Result<()> {
-    let status = MenuItem::with_id(app, "status", "StandUp", false, None::<&str>)?;
-    let today = MenuItem::with_id(app, "today", i18n::f(lang, "tray.breaksToday", &["0"]), false, None::<&str>)?;
     let take_break = MenuItem::with_id(app, "break", i18n::t(lang, "tray.takeBreak"), true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", i18n::t(lang, "tray.settings"), true, None::<&str>)?;
     let history = MenuItem::with_id(app, "history", i18n::t(lang, "tray.history"), true, None::<&str>)?;
     let exit = MenuItem::with_id(app, "exit", i18n::t(lang, "tray.exit"), true, None::<&str>)?;
-    let separator_one = PredefinedMenuItem::separator(app)?;
-    let separator_two = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&status, &today, &separator_one, &take_break, &settings, &history, &separator_two, &exit])?;
+    let separator = PredefinedMenuItem::separator(app)?;
+    let menu = Menu::with_items(app, &[&take_break, &settings, &history, &separator, &exit])?;
 
     TrayIconBuilder::with_id("standup")
         .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
@@ -593,7 +604,7 @@ fn build_tray(app: &AppHandle, lang: &str) -> tauri::Result<()> {
         })
         .build(app)?;
 
-    app.manage(TrayItems { status, today, take_break, settings, history, exit });
+    app.manage(TrayItems { take_break, settings, history, exit });
     Ok(())
 }
 

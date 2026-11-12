@@ -6,22 +6,23 @@
 <link rel="stylesheet" href="common.css">
 </head>
 <body>
+<!-- Every change saves at once and shows a check mark; there is no Save button. -->
 <form id="form">
   <fieldset>
     <legend data-i18n="settings.shortGroup"></legend>
-    <label class="row"><span data-i18n="settings.every"></span> <input id="work" type="number" min="1" max="480" step="1"></label>
-    <label class="row"><span data-i18n="settings.length"></span> <input id="rest" type="number" min="0.5" max="60" step="0.5"></label>
+    <label class="row"><span data-i18n="settings.every"></span> <span class="field"><input id="work" type="number" min="1" max="480" step="1"><span class="mark" aria-hidden="true">✓</span></span></label>
+    <label class="row"><span data-i18n="settings.length"></span> <span class="field"><input id="rest" type="number" min="0.5" max="60" step="0.5"><span class="mark" aria-hidden="true">✓</span></span></label>
   </fieldset>
   <fieldset>
     <legend data-i18n="settings.longGroup"></legend>
-    <label class="row"><span data-i18n="settings.every"></span> <input id="longEvery" type="number" min="1" max="480" step="1"></label>
-    <label class="row"><span data-i18n="settings.length"></span> <input id="longRest" type="number" min="0.5" max="60" step="0.5"></label>
+    <label class="row"><span data-i18n="settings.every"></span> <span class="field"><input id="longEvery" type="number" min="1" max="480" step="1"><span class="mark" aria-hidden="true">✓</span></span></label>
+    <label class="row"><span data-i18n="settings.length"></span> <span class="field"><input id="longRest" type="number" min="0.5" max="60" step="0.5"><span class="mark" aria-hidden="true">✓</span></span></label>
   </fieldset>
   <fieldset>
     <legend data-i18n="settings.snoozeGroup"></legend>
-    <label class="row"><span data-i18n="settings.length"></span> <input id="snoozeTime" type="number" min="0.5" max="60" step="0.5"></label>
+    <label class="row"><span data-i18n="settings.length"></span> <span class="field"><input id="snoozeTime" type="number" min="0.5" max="60" step="0.5"><span class="mark" aria-hidden="true">✓</span></span></label>
   </fieldset>
-  <label><input id="autostart" type="checkbox"> <span data-i18n="settings.autostartMac"></span></label>
+  <label><input id="autostart" type="checkbox"> <span data-i18n="settings.autostartMac"></span><span class="mark" aria-hidden="true">✓</span></label>
 
   <div class="section">
     <button type="button" id="advanced" data-i18n="settings.advanced"></button>
@@ -37,10 +38,6 @@
   </details>
 
   <p id="error" class="error section" role="alert"></p>
-  <div class="actions">
-    <button type="button" id="cancel" data-i18n="common.cancel"></button>
-    <button type="submit" class="primary" data-i18n="common.save"></button>
-  </div>
 </form>
 <script src="common.js"></script>
 <script src="settings.js"></script>

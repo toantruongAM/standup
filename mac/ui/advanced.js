@@ -19,6 +19,33 @@ async function load() {
     select.appendChild(item);
   }
   showPool(a);
+
+  // Every change saves at once. A new language reloads this window, so its check shows after.
+  autoSave([byId('idle'), byId('snoozes'), select], save);
+  if (sessionStorage.getItem('flash') === 'language') {
+    sessionStorage.removeItem('flash');
+    flashMark(markFor(select));
+  }
+}
+
+async function save(input) {
+  const idle = byId('idle');
+  const snoozes = byId('snoozes');
+  if (!numberOk(idle)) {
+    error.textContent = t('advanced.invalidIdle');
+    return false;
+  }
+  if (!numberOk(snoozes)) return false;
+  if (input.id === 'language') sessionStorage.setItem('flash', 'language');
+  try {
+    await invoke('save_advanced', { idle: Number(idle.value), snoozes: Math.round(Number(snoozes.value)), language: byId('language').value });
+    error.textContent = '';
+    return true;
+  } catch (message) {
+    sessionStorage.removeItem('flash');
+    error.textContent = message;
+    return false;
+  }
 }
 
 function toBase64(buffer) {
@@ -56,18 +83,5 @@ byId('picker').addEventListener('change', async (event) => {
 });
 
 byId('open').addEventListener('click', () => invoke('open_pictures_folder'));
-byId('cancel').addEventListener('click', () => invoke('close_self'));
-
-byId('form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  error.textContent = '';
-  try {
-    const snoozes = Math.round(Number(byId('snoozes').value));
-    await invoke('save_advanced', { idle: Number(byId('idle').value), snoozes: Math.max(0, Math.min(10, snoozes)), language: byId('language').value });
-    await invoke('close_self');
-  } catch (message) {
-    error.textContent = message;
-  }
-});
 
 load();

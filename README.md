@@ -34,5 +34,5 @@ Forgot the passcode? End StandUp in Task Manager, delete the `salt=` and `hash=`
 ## Build and test
 
 `build.cmd` compiles `dist\StandUp.exe` with the C# compiler included in Windows, and `package.cmd` wraps it into the installer.
-`art\generate.html` draws the built-in pictures in each language, and `i18n\strings.json` holds the text for both apps.
+`art\generate.html` draws the built-in pictures in each language (`art\render.ps1` saves them as PNGs), and `i18n\strings.json` holds the text for both apps.
 `tests\EngineTests.cs` covers the timing rules. `tests\LiveProbe.cs` drives the real break screen and covers your display for about 30 seconds.

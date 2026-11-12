@@ -113,20 +113,63 @@ static class DialogProbe
         Check("snooze count reaches the break rules", (int)T("EngineConfig").GetField("MaxSnoozes").GetValue(Call(loaded, "ToEngineConfig")) == 4);
         T("AppSettings").GetField("MaxSnoozes").SetValue(loaded, 2);
 
-        var settingsForm = (Form)New("SettingsForm", loaded);
+        var settingsForm = (Form)New("SettingsForm", loaded, false);
         Shoot(settingsForm, "dialog-settings.png");
         Check("no lock-screen timer in Settings", !AllControls(settingsForm).Any(c => c.Text.Contains("ock-screen")));
         Check("Settings has three bold group headings", AllControls(settingsForm).OfType<Label>().Count(l => l.Font.Bold) == 3);
         Check("pictures stay out of the main Settings", !AllControls(settingsForm).Any(c => c.Text.Contains("Add pictures")));
+        Check("Settings has no Save or Cancel button", !AllControls(settingsForm).OfType<Button>().Any(b => b.Text == "Save" || b.Text == "Cancel"));
+
+        // Changing a value saves it at once and lights only that row's check mark, which then fades.
+        NumericUpDown[] numbers = AllControls(settingsForm).OfType<NumericUpDown>().ToArray();
+        Control[] marks = AllControls(settingsForm).Where(c => c.GetType().Name == "SavedMark").ToArray();
+        Func<Control, bool> lit = m => (bool)m.GetType().GetProperty("IsLit").GetValue(m);
+        Check("every setting has a check mark beside it (" + marks.Length + ")", marks.Length == 6 && numbers.Length == 5);
+        Check("no check marks before anything changes", !marks.Any(m => lit(m)));
+        numbers[0].Value = 45;
+        Shoot(settingsForm, "autosave-settings.png");
+        Check("short break 'every' saved without pressing anything", (decimal)T("AppSettings").GetField("WorkMinutes").GetValue(CallStatic("AppSettings", "Load")) == 45m);
+        Check("its check mark shows, and only that one", lit(numbers[0].Parent.Controls[1]) && marks.Count(m => lit(m)) == 1);
+        numbers[4].Value = 3;
+        Check("snooze length saved too", (decimal)T("AppSettings").GetField("SnoozeMinutes").GetValue(CallStatic("AppSettings", "Load")) == 3m);
+        var fade = Stopwatch.StartNew();
+        while (fade.ElapsedMilliseconds < 1200) { Application.DoEvents(); Thread.Sleep(20); }
+        Check("check mark still there after 1.2s", lit(numbers[4].Parent.Controls[1]));
+        while (fade.ElapsedMilliseconds < 2800) { Application.DoEvents(); Thread.Sleep(20); }
+        Check("check marks have faded away after 2.8s", !marks.Any(m => lit(m)) && marks.All(m => m.ForeColor.ToArgb() == m.BackColor.ToArgb()));
+        numbers[2].Text = "150";
+        var typing = Stopwatch.StartNew();
+        while (typing.ElapsedMilliseconds < 1000) { Application.DoEvents(); Thread.Sleep(20); }
+        Check("a typed number saves after a short pause", (decimal)T("AppSettings").GetField("LongEveryMinutes").GetValue(CallStatic("AppSettings", "Load")) == 150m && lit(numbers[2].Parent.Controls[1]));
         settingsForm.Dispose();
+
+        var advancedForm = (Form)New("AdvancedForm", loaded, false);
+        Shoot(advancedForm, "dialog-advanced.png");
+        Check("Advanced settings has no Save or Cancel button", !AllControls(advancedForm).OfType<Button>().Any(b => b.Text == "Save" || b.Text == "Cancel"));
+        NumericUpDown snoozeCount = AllControls(advancedForm).OfType<NumericUpDown>().ElementAt(1);
+        snoozeCount.Value = 3;
+        Check("snooze count saved at once with a check mark", (int)T("AppSettings").GetField("MaxSnoozes").GetValue(CallStatic("AppSettings", "Load")) == 3 && lit(snoozeCount.Parent.Controls[1]));
+        AllControls(advancedForm).OfType<ComboBox>().First().SelectedIndex = 1;
+        Application.DoEvents();
+        Check("picking a language saves it and closes to reopen in it", (string)T("AppSettings").GetField("Language").GetValue(CallStatic("AppSettings", "Load")) == "es"
+            && (bool)advancedForm.GetType().GetProperty("LanguageChanged").GetValue(advancedForm));
+        advancedForm.Dispose();
+        var reopened = (Form)New("AdvancedForm", loaded, true);
+        Shoot(reopened, "autosave-language-es.png");
+        Check("reopened window shows the check by Language", lit(AllControls(reopened).OfType<ComboBox>().First().Parent.Controls[1]));
+        reopened.Dispose();
+        T("AppSettings").GetField("Language").SetValue(loaded, "en");
+        T("AppSettings").GetField("MaxSnoozes").SetValue(loaded, 2);
+        Call(loaded, "Save");
+        T("L10n").GetProperty("Language", Any).SetValue(null, "en");
 
         foreach (string lang in new[] { "en", "es", "vi" })
         {
             T("L10n").GetProperty("Language", Any).SetValue(null, lang);
-            var s = (Form)New("SettingsForm", loaded);
+            var s = (Form)New("SettingsForm", loaded, false);
             Shoot(s, "i18n-settings-" + lang + ".png");
             s.Dispose();
-            var a = (Form)New("AdvancedForm", loaded);
+            var a = (Form)New("AdvancedForm", loaded, false);
             Shoot(a, "i18n-advanced-" + lang + ".png");
             if (lang == "en") Check("pictures, language and snooze count are in Advanced settings", AllControls(a).Any(c => c.Text == "Add pictures...") && AllControls(a).OfType<ComboBox>().Any() && AllControls(a).Any(c => c.Text == "Snoozes allowed per break"));
             a.Dispose();
@@ -179,7 +222,7 @@ static class DialogProbe
         var seen = new System.Collections.Generic.HashSet<string>();
         string previous = null;
         bool repeated = false;
-        for (int i = 0; i < 60; i++)
+        for (int i = 0; i < 200; i++)
         {
             using (var bmp = (Bitmap)Call(pool, "Next"))
             {
@@ -190,8 +233,17 @@ static class DialogProbe
                 seen.Add(name);
             }
         }
-        Check("all 12 pictures are in the pool (saw " + seen.Count + ")", seen.Count == 12);
+        Check("all 24 pictures are in the pool (saw " + seen.Count + ")", seen.Count == 24);
         Check("the same picture never shows twice in a row", !repeated);
+
+        // The right-click menu: actions only, no "Next break in" or "Breaks today" lines.
+        object tray = New("TrayApp", loaded, New("TestOptions"));
+        var icon = (NotifyIcon)tray.GetType().GetField("_tray", Any).GetValue(tray);
+        string[] items = icon.ContextMenuStrip.Items.Cast<ToolStripItem>().Select(i => i is ToolStripSeparator ? "---" : i.Text).ToArray();
+        Console.WriteLine("      tray menu: " + string.Join(" | ", items));
+        Check("tray menu shows no status lines", items.SequenceEqual(new[] { "Take a break now", "Settings...", "History...", "---", "Exit..." }));
+        Check("status still shows as the hover tip", icon.Text.StartsWith("StandUp: "));
+        Call(tray, "Shutdown");
 
         Check("lock-screen timer code is gone", app.GetType("StandUp.LockScreenTimer") == null && app.GetType("StandUp.LockTimerForm") == null);
 

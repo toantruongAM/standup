@@ -6,14 +6,15 @@
 <link rel="stylesheet" href="common.css">
 <style>
   select { background: var(--control); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font: inherit; }
-  label.row span { padding-right: 12px; }
+  label.row > span:first-child { padding-right: 12px; }
 </style>
 </head>
 <body>
+<!-- Every change saves at once and shows a check mark; there is no Save button. -->
 <form id="form">
-  <label class="row"><span data-i18n="advanced.idle"></span> <input id="idle" type="number" min="1" max="60" step="1"></label>
-  <label class="row"><span data-i18n="advanced.snoozes"></span> <input id="snoozes" type="number" min="0" max="10" step="1"></label>
-  <label class="row"><span data-i18n="advanced.language"></span> <select id="language"></select></label>
+  <label class="row"><span data-i18n="advanced.idle"></span> <span class="field"><input id="idle" type="number" min="1" max="60" step="1"><span class="mark" aria-hidden="true">✓</span></span></label>
+  <label class="row"><span data-i18n="advanced.snoozes"></span> <span class="field"><input id="snoozes" type="number" min="0" max="10" step="1"><span class="mark" aria-hidden="true">✓</span></span></label>
+  <label class="row"><span data-i18n="advanced.language"></span> <span class="field"><select id="language"></select><span class="mark" aria-hidden="true">✓</span></span></label>
 
   <div class="section">
     <p id="pool"></p>
@@ -23,10 +24,6 @@
   </div>
 
   <p id="error" class="error section" role="alert"></p>
-  <div class="actions">
-    <button type="button" id="cancel" data-i18n="common.cancel"></button>
-    <button type="submit" class="primary" data-i18n="common.save"></button>
-  </div>
 </form>
 <script src="common.js"></script>
 <script src="advanced.js"></script>

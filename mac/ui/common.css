@@ -77,4 +77,9 @@ fieldset label.row { padding-left: 14px; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .error { color: var(--error); min-height: 18px; margin: 0 0 4px; }
 .section { margin-top: 16px; }
+.field { display: inline-flex; align-items: center; }
+/* The "saved" check: appears at once, holds 1.5s (set in common.js), then fades over 1s. */
+.mark { display: inline-block; width: 22px; margin-left: 6px; color: #16a34a; font-weight: 700; font-size: 15px; opacity: 0; transition: opacity 1s ease-out; }
+.mark.on { opacity: 1; transition: none; }
+@media (prefers-color-scheme: dark) { .mark { color: #4ade80; } }
 .link { background: none; border: none; color: var(--accent); padding: 0; text-decoration: underline; }

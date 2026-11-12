@@ -10,8 +10,8 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("StandUp Setup")]
 [assembly: AssemblyProduct("StandUp")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
 
 namespace StandUpSetup
 {
@@ -19,7 +19,7 @@ namespace StandUpSetup
     static class Installer
     {
         public const string Title = "StandUp Setup";
-        const string Version = "1.2.0";
+        const string Version = "1.3.0";
         const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\StandUp";
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 

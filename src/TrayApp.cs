@@ -32,7 +32,7 @@ namespace StandUp
         readonly Random _random = new Random();
         readonly List<OverlayForm> _overlays = new List<OverlayForm>();
         readonly NotifyIcon _tray;
-        readonly ToolStripMenuItem _status, _today, _breakNow, _settingsItem, _historyItem, _exitItem;
+        readonly ToolStripMenuItem _breakNow, _settingsItem, _historyItem, _exitItem;
         readonly Timer _timer;
 
         InputGuard _guard;
@@ -61,15 +61,10 @@ namespace StandUp
             _engine.Snoozed += at => _history.RecordSnooze(at, _engine.Config.SnoozeSeconds);
 
             var menu = new ContextMenuStrip();
-            _status = new ToolStripMenuItem { Enabled = false };
-            _today = new ToolStripMenuItem { Enabled = false };
             _breakNow = new ToolStripMenuItem("", null, delegate { _engine.TakeBreakNow(DateTime.UtcNow); });
             _settingsItem = new ToolStripMenuItem("", null, delegate { OpenSettings(); });
             _historyItem = new ToolStripMenuItem("", null, delegate { OpenHistory(); });
             _exitItem = new ToolStripMenuItem("", null, delegate { TryExit(); });
-            menu.Items.Add(_status);
-            menu.Items.Add(_today);
-            menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(_breakNow);
             menu.Items.Add(_settingsItem);
             menu.Items.Add(_historyItem);
@@ -267,12 +262,9 @@ namespace StandUp
                     break;
             }
 
-            int breaks = _history.BreaksToday;
-            string today = L10n.T("tray.breaksToday", breaks);
-            if (_status.Text != state) _status.Text = state;
-            if (_today.Text != today) _today.Text = today;
             _breakNow.Enabled = _engine.Phase == Phase.Working;
 
+            // The status shows only as the icon's hover tip, not in the right-click menu.
             string tip = "StandUp: " + state;
             if (tip.Length > 63) tip = tip.Substring(0, 63);
             if (_tray.Text != tip) _tray.Text = tip;
@@ -289,20 +281,22 @@ namespace StandUp
                     if (gate.ShowDialog() != DialogResult.OK) return;
                 }
 
-                // A language change in Advanced settings reopens Settings in the new language.
+                // Changes save as they're made. A language change in Advanced settings reopens
+                // Settings and Advanced settings in the new language.
+                bool reopenAdvanced = false;
                 DialogResult result;
                 do
                 {
-                    using (var form = new SettingsForm(_settings))
+                    using (var form = new SettingsForm(_settings, reopenAdvanced))
                     {
                         result = form.ShowDialog();
+                        reopenAdvanced = form.LanguageChanged;
                         if (form.LanguageChanged) ApplyLanguage();
                     }
-                    if (result == DialogResult.OK && !Program.TestMode)
-                        AutoStart.Apply(_settings.StartWithWindows, Application.ExecutablePath);
                 } while (result == DialogResult.Retry);
 
-                // Advanced settings (such as the snooze count) save on their own, so apply even after Cancel.
+                // The timer takes the new times once the window closes, so stepping through values
+                // with the arrows can't start a break part-way.
                 _engine.ApplyConfig(BuildConfig(), DateTime.UtcNow);
             }
             finally

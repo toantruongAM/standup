@@ -4,19 +4,25 @@
 <style>html,body{margin:0;padding:0;overflow:hidden;background:#fff}svg{display:block}</style>
 <body>
 <script>
-// Each scene is drawn in code and captured to a PNG by art/render.cmd. Open with #1 to #12.
+// Each scene is drawn in code and captured to a PNG by art/render.ps1. Open with #1 to #24.
 const INK = '#2b2320', S = `stroke="${INK}" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"`;
 
 function eyes(kind, dx, y, r, lid) {
   const one = (x, look) => {
     if (kind === 'happy') return `<path d="M${x-r},${y+4} Q${x},${y-r*1.3} ${x+r},${y+4}" fill="none" ${S} stroke-width="9"/>`;
+    if (kind.startsWith('slit')) {
+      // Cat eyes: green with an upright slit, optionally half-closed in judgement.
+      let c = `<circle cx="${x}" cy="${y}" r="${r}" fill="#c7dd5a" ${S}/><ellipse cx="${x+look}" cy="${y}" rx="${r*.22}" ry="${r*.8}" fill="${INK}"/><circle cx="${x+look+r*.3}" cy="${y-r*.35}" r="${r*.18}" fill="#fff"/>`;
+      if (kind === 'slitjudge') c += `<path d="M${x-r-3},${y-r-3} H${x+r+3} V${y-r*.1} H${x-r-3} Z" fill="${lid}" ${S}/>`;
+      return c;
+    }
     let s = `<circle cx="${x}" cy="${y}" r="${r}" fill="#fff" ${S}/>`;
     s += `<circle cx="${x+look}" cy="${y+2}" r="${r*.58}" fill="${INK}"/><circle cx="${x+look+r*.2}" cy="${y-r*.22}" r="${r*.2}" fill="#fff"/>`;
     if (kind === 'judge') s += `<path d="M${x-r-3},${y-r-3} H${x+r+3} V${y-r*.12} H${x-r-3} Z" fill="${lid}" ${S}/>`;
     if (kind === 'tired') s += `<path d="M${x-r-3},${y-r-3} H${x+r+3} V${y+r*.05} H${x-r-3} Z" fill="${lid}" ${S}/><path d="M${x-r*.8},${y+r*1.25} Q${x},${y+r*1.7} ${x+r*.8},${y+r*1.25}" fill="none" ${S} stroke-width="5"/>`;
     return s;
   };
-  const look = kind === 'judge' ? r * .3 : 0;
+  const look = kind === 'judge' || kind === 'slitjudge' ? r * .3 : 0;
   return one(-dx, look) + one(dx, kind === 'stare' ? -r * .2 : look);
 }
 
@@ -51,6 +57,21 @@ function babyHead(o = {}) {
     <ellipse cx="-68" cy="32" rx="22" ry="14" fill="#f59aa6" opacity=".75"/><ellipse cx="68" cy="32" rx="22" ry="14" fill="#f59aa6" opacity=".75"/>
     ${eyes(eye, 44, -12, 24, skin)}
     <path d="M-7,18 Q0,27 7,18" fill="none" ${S} stroke-width="5"/>${mouths[mouth]}`;
+}
+
+function catHead(o = {}) {
+  const { fur = '#a8a29e', inner = '#f4a7b9', eye = 'slit', mouth = 'w', stripes = null } = o;
+  const ear = (m) => `<g transform="scale(${m} 1)"><path d="M-100,-36 L-108,-152 L-18,-92 Z" fill="${fur}" ${S}/><path d="M-86,-58 L-92,-122 L-42,-88 Z" fill="${inner}"/></g>`;
+  const mouths = {
+    w: `<path d="M-30,42 Q-15,58 0,42 Q15,58 30,42" fill="none" ${S} stroke-width="6"/>`,
+    flat: `<path d="M-22,50 H22" ${S} stroke-width="6"/>`,
+    open: `<path d="M-28,42 Q0,34 28,42 Q22,96 0,98 Q-22,96 -28,42 Z" fill="#7c2b3b" ${S}/><path d="M-13,82 Q0,70 13,82 Q9,96 0,96 Q-9,96 -13,82 Z" fill="#ef7f95"/>`
+  };
+  const stripe = stripes ? lines(['M-26,-94 L-18,-58', 'M0,-99 V-58', 'M26,-94 L18,-58', 'M-118,-6 H-86', 'M-116,18 H-90', 'M118,-6 H86', 'M116,18 H90'], 9, stripes) : '';
+  return ear(1) + ear(-1) + `<ellipse cx="0" cy="0" rx="120" ry="102" fill="${fur}" ${S}/>` + stripe +
+    eyes(eye, 46, -16, 25, fur) +
+    `<path d="M-15,16 H15 L0,32 Z" fill="${inner}" ${S} stroke-width="5"/><path d="M0,32 V42" ${S} stroke-width="5"/>` + mouths[mouth] +
+    lines(['M-48,30 L-156,12', 'M-48,44 L-152,60', 'M48,30 L156,12', 'M48,44 L152,60'], 4);
 }
 
 const at = (x, y, s, body, r = 0) => `<g transform="translate(${x} ${y}) rotate(${r}) scale(${s})">${body}</g>`;
@@ -173,14 +194,124 @@ const scenes = [
     limb('M380,520 L560,400', SKIN, 46) + limb('M560,400 L800,350', SKIN, 0) + limb('M180,540 L140,640', SKIN, 46) +
     at(290, 325, 1.4, babyHead({ eye: 'judge', mouth: 'flat' })) +
     `<path d="M560,720 C530,540 580,440 670,440 C760,440 800,540 770,720 Z" fill="#f2c078" ${S}/><ellipse cx="605" cy="730" rx="56" ry="24" fill="#f2c078" ${S}/><ellipse cx="735" cy="730" rx="56" ry="24" fill="#f2c078" ${S}/>` +
-    at(670, 330, 1.25, dogHead({ fur: '#f2c078', ear: '#c98a4b', eye: 'judge', mouth: 'flat' }))
+    at(670, 330, 1.25, dogHead({ fur: '#f2c078', ear: '#c98a4b', eye: 'judge', mouth: 'flat' })),
+  // 13. Cat asleep on the laptop keyboard
+  () => floor('#e0e7ff', '#a98467', 600) +
+    `<rect x="330" y="120" width="540" height="410" rx="22" fill="#2f3b52" ${S}/><rect x="362" y="152" width="476" height="346" rx="6" fill="#fff"/>` +
+    [['aaaaaaaaaaaaaaaaaaa', 230], ['jjjjjjjjkkkkkkkkk;;;', 290], ['zzzzzzzzzzzzzzzzzz', 350], ['ffffffffff////////', 410]].map(([t, y]) => `<text x="380" y="${y}" font-family="Consolas, monospace" font-size="38" fill="${INK}">${t}</text>`).join('') +
+    `<path d="M300,520 H900 L980,628 H220 Z" fill="#c0c6cf" ${S}/>` +
+    limb('M900,560 C1010,560 1050,470 1000,420', '#f4a259', 40) +
+    `<ellipse cx="640" cy="555" rx="290" ry="92" fill="#f4a259" ${S}/>` + lines(['M560,480 Q575,520 560,560', 'M650,470 Q665,515 650,560', 'M740,478 Q755,520 740,562', 'M830,495 Q842,525 830,560'], 10, '#c56f22') +
+    `<ellipse cx="430" cy="628" rx="54" ry="30" fill="#f4a259" ${S}/><ellipse cx="530" cy="636" rx="54" ry="30" fill="#f4a259" ${S}/>` +
+    at(340, 470, 1, catHead({ fur: '#f4a259', stripes: '#c56f22', eye: 'slitjudge', mouth: 'flat' }), -10),
+  // 14. Cat about to push the mug off the desk
+  () => `<rect width="1200" height="900" fill="#fde2e4"/><rect y="700" width="1200" height="200" fill="#9c6644"/>` +
+    `<rect x="-20" y="470" width="790" height="44" fill="#b08968" ${S}/><rect x="680" y="514" width="44" height="200" fill="#b08968" ${S}/>` +
+    limb('M330,440 C250,480 250,580 300,620', '#6d6875', 36) +
+    `<ellipse cx="470" cy="370" rx="160" ry="120" fill="#6d6875" ${S}/><ellipse cx="400" cy="474" rx="46" ry="24" fill="#6d6875" ${S}/>` +
+    limb('M590,360 Q680,330 740,380', '#6d6875', 44) +
+    at(810, 400, 1, `<path d="M42,-10 C100,-10 100,60 42,60" fill="none" ${S} stroke-width="14"/><rect x="-55" y="-60" width="100" height="125" rx="14" fill="#fff" ${S}/>` +
+      `<text x="-5" y="10" text-anchor="middle" font-family="Segoe UI" font-weight="800" font-size="20" fill="#d13f4c" data-fit="88">${W.mug1}</text><text x="-5" y="36" text-anchor="middle" font-family="Segoe UI" font-weight="800" font-size="20" fill="#d13f4c" data-fit="88">${W.mug2}</text>` +
+      lines(['M-30,-80 q-12,-24 0,-44', 'M5,-80 q-12,-24 0,-44'], 6, '#8d99ae'), 22) +
+    lines(['M900,330 l40,-24', 'M915,390 l52,0', 'M900,450 l40,24'], 9) +
+    at(430, 210, 1.05, catHead({ fur: '#6d6875', eye: 'slitjudge', mouth: 'flat' }), -6),
+  // 15. Cat in a box that says OFFICE
+  () => floor('#d0f4de', '#c9ada7', 640) +
+    `<path d="M360,430 L410,392 H790 L840,430 Z" fill="#7f5539" ${S}/>` +
+    at(600, 330, 1.4, catHead({ fur: '#f1f1ee', inner: '#f4a7b9', stripes: '#b8b8b0', eye: 'slitjudge', mouth: 'flat' })) +
+    `<ellipse cx="520" cy="432" rx="48" ry="26" fill="#f1f1ee" ${S}/><ellipse cx="680" cy="432" rx="48" ry="26" fill="#f1f1ee" ${S}/>` +
+    `<rect x="360" y="430" width="480" height="290" fill="#d4a373" ${S}/>` +
+    `<path d="M360,430 L250,520 L300,560 L360,470 Z" fill="#e9c46a" ${S}/><path d="M840,430 L950,520 L900,560 L840,470 Z" fill="#e9c46a" ${S}/>` +
+    `<text x="600" y="600" text-anchor="middle" font-family="Segoe UI" font-weight="800" font-size="58" fill="#7f5539" data-fit="420">${W.office}</text>` +
+    lines(['M420,640 H560', 'M640,660 H780'], 6, '#b07d4f'),
+  // 16. Cat doing the big stretch
+  () => floor('#fff1d0', '#e9d8a6', 640) +
+    limb('M800,430 L790,690', '#a8a29e', 52) + limb('M850,420 L870,690', '#a8a29e', 52) +
+    at(640, 470, 1, `<ellipse cx="0" cy="0" rx="270" ry="96" fill="#a8a29e" ${S}/>`, -18) +
+    lines(['M560,400 Q585,440 575,480', 'M650,370 Q675,412 668,452', 'M740,340 Q765,380 760,420'], 10, '#78716c') +
+    limb('M870,360 C940,250 900,170 960,120', '#a8a29e', 34) +
+    limb('M470,560 L250,660', '#a8a29e', 50) + limb('M500,590 L300,700', '#a8a29e', 50) +
+    at(360, 500, .95, catHead({ fur: '#a8a29e', stripes: '#78716c', eye: 'happy', mouth: 'open' }), 12),
+  // 17. Cat napping in sunglasses
+  () => floor('#ffe5ec', '#ffc2d1', 640) +
+    `<circle cx="1060" cy="140" r="70" fill="#ffd166"/>` + lines(['M1060,30 V0', 'M950,140 H920', 'M980,60 L958,38', 'M1140,60 L1162,38'], 9, '#ffb703') +
+    `<ellipse cx="600" cy="660" rx="380" ry="96" fill="#7b2cbf" ${S}/>` +
+    limb('M820,580 C940,600 980,680 900,720', '#f4a259', 38) +
+    `<ellipse cx="640" cy="540" rx="280" ry="140" fill="#f4a259" ${S}/>` + lines(['M620,410 Q640,460 620,510', 'M720,420 Q740,465 722,515', 'M820,450 Q836,490 820,530'], 10, '#c56f22') +
+    `<ellipse cx="560" cy="676" rx="60" ry="28" fill="#f4a259" ${S}/>` +
+    at(420, 430, 1.2, catHead({ fur: '#f4a259', stripes: '#c56f22', eye: 'happy', mouth: 'w' }), -8) +
+    at(420, 430, 1.2, `<rect x="-100" y="-46" width="84" height="56" rx="22" fill="${INK}"/><rect x="16" y="-46" width="84" height="56" rx="22" fill="${INK}"/><path d="M-20,-30 H20" ${S} stroke-width="8"/>` +
+      lines(['M-82,-34 l18,-0', 'M34,-34 l18,0'], 6, '#fff'), -8) +
+    `<text x="250" y="250" font-family="Segoe Print, Comic Sans MS" font-weight="700" font-size="64" fill="#7b2cbf">z z Z</text>`,
+  // 18. Baby and cat judge you together
+  () => floor('#e2ece9', '#bee1e6', 640) +
+    `<ellipse cx="420" cy="570" rx="140" ry="140" fill="${SKIN}" ${S}/>` + diaper(420, 630, 140, 86) +
+    `<ellipse cx="360" cy="735" rx="56" ry="26" fill="${SKIN}" ${S}/><ellipse cx="480" cy="735" rx="56" ry="26" fill="${SKIN}" ${S}/>` +
+    limb('M310,540 L280,640', SKIN, 44) + limb('M530,540 L600,600', SKIN, 44) +
+    at(420, 310, 1.45, babyHead({ eye: 'judge', mouth: 'flat' })) +
+    limb('M900,690 C1000,690 1040,600 990,560', '#4a4e69', 34) +
+    `<ellipse cx="800" cy="600" rx="130" ry="130" fill="#4a4e69" ${S}/><ellipse cx="740" cy="722" rx="46" ry="22" fill="#4a4e69" ${S}/><ellipse cx="860" cy="722" rx="46" ry="22" fill="#4a4e69" ${S}/>` +
+    at(800, 400, 1.05, catHead({ fur: '#4a4e69', eye: 'slitjudge', mouth: 'flat' })),
+  // 19. Baby coach with a whistle and a stopwatch
+  () => floor('#caffbf', '#52b788', 600) + lines(['M0,690 H1200', 'M120,620 L40,900', 'M1080,620 L1160,900'], 10, '#fff') +
+    limb('M540,690 L520,740', SKIN, 48) + limb('M660,690 L690,740', SKIN, 48) +
+    `<path d="M440,700 C430,520 500,450 600,450 C700,450 770,520 760,700 Z" fill="#3a86ff" ${S}/>` + lines(['M600,470 V690'], 6, '#fff') +
+    limb('M480,520 Q390,600 470,650', '#3a86ff', 48) +
+    limb('M720,520 Q820,470 850,380', '#3a86ff', 48) +
+    `<circle cx="860" cy="300" r="70" fill="#fff" ${S}/><rect x="842" y="206" width="36" height="28" rx="6" fill="#adb5bd" ${S}/><path d="M860,300 V252 M860,300 L892,318" ${S}/>` +
+    at(600, 280, 1.5, babyHead({ eye: 'wide', mouth: 'flat' }) + `<path d="M-108,-46 Q0,-92 108,-46" fill="none" stroke="#e63946" stroke-width="26"/>`) +
+    `<path d="M560,370 L630,382" stroke="#ffd166" stroke-width="22" stroke-linecap="round"/><circle cx="652" cy="392" r="24" fill="#ffd166" ${S}/>` +
+    lines(['M700,370 l40,-20', 'M705,400 l46,0', 'M700,430 l40,20'], 7),
+  // 20. Baby's first steps, in tiny sneakers
+  () => floor('#fef9ef', '#ffd6a5', 640) +
+    [[180, 720], [260, 690], [330, 726], [400, 694]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="22" ry="12" fill="#e5989b"/>`).join('') +
+    limb('M555,560 L520,690', SKIN, 50) + limb('M650,560 L700,680', SKIN, 50) +
+    `<ellipse cx="505" cy="708" rx="62" ry="28" fill="#ef476f" ${S}/><ellipse cx="718" cy="696" rx="62" ry="28" fill="#ef476f" ${S}/>` + lines(['M480,694 H520', 'M694,682 H734'], 6, '#fff') +
+    limb('M500,430 Q410,360 390,250', SKIN, 44) + limb('M700,430 Q790,360 810,250', SKIN, 44) +
+    `<ellipse cx="600" cy="470" rx="130" ry="130" fill="${SKIN}" ${S}/>` + diaper(600, 520, 130, 80) +
+    at(600, 250, 1.3, babyHead({ eye: 'wide', mouth: 'smile' }), -6) +
+    lines(['M430,600 q-20,20 0,40', 'M780,600 q20,20 0,40', 'M360,250 l-30,-30', 'M840,250 l30,-30'], 7),
+  // 21. Dog with a tennis ball and puppy eyes
+  () => floor('#e9f5db', '#b5c99a', 660) +
+    lines(['M180,560 q-40,-40 0,-80', 'M120,600 q-50,-50 0,-110', 'M1020,560 q40,-40 0,-80', 'M1080,600 q50,-50 0,-110'], 10, '#90a955') +
+    at(600, 360, 2.2, dogHead({ fur: '#f6f1e9', ear: '#c9a27e', muzzle: '#fffaf2', eye: 'wide', mouth: 'leash' })) +
+    lines(['M455,236 Q500,200 545,226', 'M745,236 Q700,200 655,226'], 10) +
+    `<circle cx="600" cy="520" r="74" fill="#d4e157" ${S}/><path d="M540,478 Q600,530 540,568 M660,478 Q600,530 660,568" fill="none" stroke="#fff" stroke-width="8"/>`,
+  // 22. Dog doing downward dog on a yoga mat
+  () => floor('#f1faee', '#a8dadc', 640) +
+    `<rect x="140" y="680" width="920" height="30" rx="14" fill="#e76f51" ${S}/>` +
+    limb('M790,440 L800,680', '#f2c078', 52) + limb('M840,430 L860,680', '#f2c078', 52) +
+    limb('M820,400 L470,560', '#f2c078', 150) +
+    limb('M860,380 C900,300 920,270 960,230', '#f2c078', 30) +
+    limb('M480,600 L290,672', '#f2c078', 46) + limb('M520,620 L340,680', '#f2c078', 46) +
+    at(410, 520, .95, dogHead({ fur: '#f2c078', ear: '#c98a4b', eye: 'happy', mouth: 'tongue' }), -14),
+  // 23. Hamster running in its wheel
+  () => floor('#fff3b0', '#e09f3e', 720) +
+    lines(['M600,400 L430,760', 'M600,400 L770,760'], 22) + lines(['M600,400 L430,760', 'M600,400 L770,760'], 10, '#adb5bd') +
+    `<circle cx="600" cy="400" r="300" fill="#fffdf6" ${S} stroke-width="14"/><circle cx="600" cy="400" r="276" fill="none" stroke="#90e0ef" stroke-width="16"/>` +
+    lines(Array.from({ length: 8 }, (_, i) => { const a = i * Math.PI / 4; return `M600,400 L${600 + 276 * Math.cos(a)},${400 + 276 * Math.sin(a)}`; }), 5, '#90e0ef') +
+    `<circle cx="600" cy="400" r="20" fill="#adb5bd" ${S}/>` +
+    lines(['M470,640 l-30,40', 'M530,650 l-10,46', 'M650,650 l20,44', 'M700,640 l36,36'], 16, '#e9a76b') +
+    `<ellipse cx="590" cy="580" rx="150" ry="96" fill="#f4a261" ${S}/><ellipse cx="610" cy="610" rx="96" ry="54" fill="#fde2c4"/>` +
+    at(720, 520, 1, `<circle cx="-42" cy="-58" r="22" fill="#f4a261" ${S}/><circle cx="34" cy="-62" r="22" fill="#f4a261" ${S}/><circle cx="0" cy="0" r="74" fill="#f4a261" ${S}/>` +
+      `<ellipse cx="-34" cy="30" rx="34" ry="26" fill="#fde2c4"/><ellipse cx="40" cy="26" rx="30" ry="24" fill="#fde2c4"/>` + eyes('wide', 28, -14, 15, '#f4a261') + `<circle cx="8" cy="14" r="9" fill="#ef7f95"/>`) +
+    lines(['M360,520 H250', 'M370,580 H230', 'M380,640 H270'], 9),
+  // 24. Penguin waddling in a scarf
+  () => floor('#caf0f8', '#ffffff', 620) +
+    [[150, 120], [330, 220], [900, 90], [1080, 260], [240, 420], [980, 470]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="12" fill="#fff" ${S} stroke-width="4"/>`).join('') +
+    `<ellipse cx="540" cy="718" rx="62" ry="24" fill="#f4a261" ${S}/><ellipse cx="672" cy="704" rx="62" ry="24" fill="#f4a261" ${S}/>` +
+    `<path d="M440,430 Q340,520 390,620 Q450,560 460,470 Z" fill="#264653" ${S}/><path d="M760,430 Q880,380 900,300 Q800,330 740,420 Z" fill="#264653" ${S}/>` +
+    `<ellipse cx="600" cy="460" rx="175" ry="250" fill="#264653" ${S}/><ellipse cx="600" cy="510" rx="122" ry="190" fill="#fff" ${S}/>` +
+    at(600, 0, 1, eyes('wide', 42, 320, 24)) + `<path d="M566,366 H634 L600,410 Z" fill="#f4a261" ${S}/>` +
+    `<path d="M460,410 Q600,460 740,410" fill="none" stroke="#e63946" stroke-width="34" stroke-linecap="round"/><path d="M690,430 L720,540" stroke="#e63946" stroke-width="32" stroke-linecap="round"/>` +
+    lines(['M360,680 q-20,-14 -40,0', 'M820,680 q20,-14 40,0', 'M330,420 l-36,-14', 'M330,470 l-40,0'], 7)
 ];
 
 // Words inside the pictures, then the captions, per language. '|' splits a caption over two lines.
 const WORDS = {
-  en: { steps: 'MY STEPS', butt: 'BUTT ACTIVITY', review1: 'needs to', review2: 'walk more', outside: 'OUTSIDE' },
-  es: { steps: 'MIS PASOS', butt: 'ACTIVIDAD DEL TRASERO', review1: 'necesita', review2: 'caminar más', outside: 'AFUERA' },
-  vi: { steps: 'SỐ BƯỚC CHÂN', butt: 'HOẠT ĐỘNG CỦA MÔNG', review1: 'cần đi bộ', review2: 'nhiều hơn', outside: 'RA NGOÀI' }
+  en: { steps: 'MY STEPS', butt: 'BUTT ACTIVITY', review1: 'needs to', review2: 'walk more', outside: 'OUTSIDE', mug1: "WORLD'S", mug2: 'BEST SITTER', office: 'OFFICE' },
+  es: { steps: 'MIS PASOS', butt: 'ACTIVIDAD DEL TRASERO', review1: 'necesita', review2: 'caminar más', outside: 'AFUERA', mug1: 'CAMPEÓN', mug2: 'DE LA SILLA', office: 'OFICINA' },
+  vi: { steps: 'SỐ BƯỚC CHÂN', butt: 'HOẠT ĐỘNG CỦA MÔNG', review1: 'cần đi bộ', review2: 'nhiều hơn', outside: 'RA NGOÀI', mug1: 'VUA', mug2: 'NGỒI LÌ', office: 'VĂN PHÒNG' }
 };
 
 const CAPTIONS = {
@@ -196,7 +327,19 @@ const CAPTIONS = {
     'Do you even walk, bro?',
     'I am crawling and still|out-moving you.',
     'Yee-haw! Walk break!',
-    'We held a meeting.|You are walking.'
+    'We held a meeting.|You are walking.',
+    'The keyboard is mine now.|Go take a walk.',
+    'Get up, or the mug|gets it.',
+    'Sitting all day is my job.|What is your excuse?',
+    'Do the big stretch.|Like this.',
+    'I nap 16 hours a day.|You are not a cat. Move.',
+    'We are both judging you.|Go walk.',
+    'Coach says:|one more lap!',
+    'I took my first steps today.|Your turn.',
+    'Ball. Outside. Now.',
+    'Downward dog.|Your turn.',
+    'Even running in circles|beats sitting still.',
+    'My legs are this short,|and I still walk.'
   ],
   es: [
     'Este eres tú. Levántate, por favor.',
@@ -210,7 +353,19 @@ const CAPTIONS = {
     '¿Y tú caminas o qué, bro?',
     'Voy gateando y aun así|me muevo más que tú.',
     '¡Yija! ¡A caminar!',
-    'Hicimos una reunión.|Te toca caminar.'
+    'Hicimos una reunión.|Te toca caminar.',
+    'Ahora el teclado es mío.|Ve a dar un paseo.',
+    'Levántate, o la taza|se cae.',
+    'Mi trabajo es estar sentado.|¿Cuál es tu excusa?',
+    'Haz el gran estiramiento.|Así.',
+    'Duermo 16 horas al día.|Tú no eres un gato. Muévete.',
+    'Los dos te estamos juzgando.|Ve a caminar.',
+    'Dice el entrenador:|¡una vuelta más!',
+    'Hoy di mis primeros pasos.|Te toca.',
+    'Pelota. Afuera. Ya.',
+    'Perro boca abajo.|Te toca.',
+    'Hasta correr en círculos|es mejor que estar sentado.',
+    'Tengo las patas así de cortas|y aun así camino.'
   ],
   vi: [
     'Đây là bạn đó. Đứng dậy đi nào.',
@@ -224,7 +379,19 @@ const CAPTIONS = {
     'Đi bộ nổi không đó, bạn ơi?',
     'Tui còn đang bò mà|vẫn năng động hơn bạn.',
     'Yee-haw! Đi dạo thôi!',
-    'Bọn tui đã họp xong.|Bạn phải đi bộ.'
+    'Bọn tui đã họp xong.|Bạn phải đi bộ.',
+    'Giờ bàn phím là của tui.|Đi dạo đi.',
+    'Đứng dậy đi, không thì|cái ly rớt đó.',
+    'Ngồi cả ngày là việc của tui.|Còn bạn lý do gì?',
+    'Vươn vai thật dài.|Như vầy nè.',
+    'Tui ngủ 16 tiếng mỗi ngày.|Bạn đâu phải mèo. Đi đi.',
+    'Hai đứa tui đang phán xét bạn.|Đi bộ đi.',
+    'Huấn luyện viên nói:|thêm một vòng nữa!',
+    'Hôm nay tui mới tập đi.|Tới lượt bạn.',
+    'Bóng. Ra ngoài. Ngay.',
+    'Tư thế chó úp mặt.|Tới lượt bạn.',
+    'Chạy vòng vòng thôi|cũng hơn ngồi im.',
+    'Chân tui ngắn vầy nè|mà tui vẫn đi bộ.'
   ]
 };
 

@@ -1,5 +1,6 @@
 const byId = (id) => document.getElementById(id);
 const error = byId('error');
+const NUMBERS = ['work', 'rest', 'longEvery', 'longRest', 'snoozeTime'];
 
 async function load() {
   await loadStrings();
@@ -10,10 +11,34 @@ async function load() {
   byId('longRest').value = s.long_break_minutes;
   byId('snoozeTime').value = s.snooze_minutes;
   byId('autostart').checked = s.start_with_mac;
+
+  // Every change saves at once. The timer takes the new times when this window closes.
+  autoSave([...NUMBERS.map(byId), byId('autostart')], save);
+}
+
+async function save() {
+  if (!NUMBERS.every((id) => numberOk(byId(id)))) {
+    error.textContent = t('settings.invalid');
+    return false;
+  }
+  try {
+    await invoke('save_settings', {
+      work: Number(byId('work').value),
+      rest: Number(byId('rest').value),
+      longEvery: Number(byId('longEvery').value),
+      longRest: Number(byId('longRest').value),
+      snooze: Number(byId('snoozeTime').value),
+      autostart: byId('autostart').checked,
+    });
+    error.textContent = '';
+    return true;
+  } catch (message) {
+    error.textContent = message;
+    return false;
+  }
 }
 
 byId('advanced').addEventListener('click', () => invoke('open_advanced'));
-byId('cancel').addEventListener('click', () => invoke('close_self'));
 
 byId('change').addEventListener('click', async () => {
   error.textContent = '';
@@ -25,24 +50,6 @@ byId('change').addEventListener('click', async () => {
     await invoke('set_passcode', { current: byId('current').value, passcode: byId('next').value });
     ['current', 'next', 'again'].forEach((id) => { byId(id).value = ''; });
     error.textContent = t('passcode.changed');
-  } catch (message) {
-    error.textContent = message;
-  }
-});
-
-byId('form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  error.textContent = '';
-  try {
-    await invoke('save_settings', {
-      work: Number(byId('work').value),
-      rest: Number(byId('rest').value),
-      longEvery: Number(byId('longEvery').value),
-      longRest: Number(byId('longRest').value),
-      snooze: Number(byId('snoozeTime').value),
-      autostart: byId('autostart').checked,
-    });
-    await invoke('close_self');
   } catch (message) {
     error.textContent = message;
   }
