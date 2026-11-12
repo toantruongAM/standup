@@ -65,7 +65,6 @@ static class DialogProbe
 
         app = Assembly.LoadFrom(exe);
         T("Paths").GetProperty("DataDir", Any).SetValue(null, data);
-        CallStatic("LockScreenTimer", "UseStateDir", data);
 
         File.WriteAllLines(Path.Combine(data, "history.csv"), new[]
         {
@@ -105,23 +104,21 @@ static class DialogProbe
         Check("changing passcode needs the current one", change.DialogResult != DialogResult.OK);
         change.Dispose();
 
+        object fresh = New("AppSettings");
+        Check("new installs: 1-minute short breaks", (decimal)T("AppSettings").GetField("BreakMinutes").GetValue(fresh) == 1m);
+        Check("new installs: 2 snoozes allowed", (int)T("AppSettings").GetField("MaxSnoozes").GetValue(fresh) == 2);
+        T("AppSettings").GetField("MaxSnoozes").SetValue(loaded, 4);
+        Call(loaded, "Save");
+        Check("snooze count is saved", (int)T("AppSettings").GetField("MaxSnoozes").GetValue(CallStatic("AppSettings", "Load")) == 4);
+        Check("snooze count reaches the break rules", (int)T("EngineConfig").GetField("MaxSnoozes").GetValue(Call(loaded, "ToEngineConfig")) == 4);
+        T("AppSettings").GetField("MaxSnoozes").SetValue(loaded, 2);
+
         var settingsForm = (Form)New("SettingsForm", loaded);
         Shoot(settingsForm, "dialog-settings.png");
+        Check("no lock-screen timer in Settings", !AllControls(settingsForm).Any(c => c.Text.Contains("ock-screen")));
+        Check("Settings has three bold group headings", AllControls(settingsForm).OfType<Label>().Count(l => l.Font.Bold) == 3);
+        Check("pictures stay out of the main Settings", !AllControls(settingsForm).Any(c => c.Text.Contains("Add pictures")));
         settingsForm.Dispose();
-
-        File.WriteAllText(Path.Combine(data, "lockstate.txt"), "");
-        FieldInfo current = T("LockScreenTimer").GetField("_current", Any);
-        current.SetValue(null, (bool?)false);
-        var outdatedForm = (Form)New("SettingsForm", loaded);
-        Shoot(outdatedForm, "dialog-settings-outdated.png");
-        Check("an older lock-screen timer offers an update", AllControls(outdatedForm).Any(c => c.Visible && c.Text == "Update lock-screen timer"));
-        outdatedForm.Dispose();
-        current.SetValue(null, (bool?)true);
-        var installedForm = (Form)New("SettingsForm", loaded);
-        Shoot(installedForm, "dialog-settings-installed.png");
-        Check("no lock-screen row once it is on and current", !AllControls(installedForm).Any(c => c.Visible && c.Text.Contains("ock-screen timer")));
-        Check("pictures moved out of the main Settings", !AllControls(installedForm).Any(c => c.Text.Contains("Add pictures")));
-        installedForm.Dispose();
 
         foreach (string lang in new[] { "en", "es", "vi" })
         {
@@ -131,14 +128,13 @@ static class DialogProbe
             s.Dispose();
             var a = (Form)New("AdvancedForm", loaded);
             Shoot(a, "i18n-advanced-" + lang + ".png");
-            if (lang == "en") Check("pictures and language are in Advanced settings", AllControls(a).Any(c => c.Text == "Add pictures...") && AllControls(a).OfType<ComboBox>().Any());
+            if (lang == "en") Check("pictures, language and snooze count are in Advanced settings", AllControls(a).Any(c => c.Text == "Add pictures...") && AllControls(a).OfType<ComboBox>().Any() && AllControls(a).Any(c => c.Text == "Snoozes allowed per break"));
             a.Dispose();
             var h = (Form)New("HistoryForm", New("History"));
             Shoot(h, "i18n-history-" + lang + ".png");
             h.Dispose();
         }
         T("L10n").GetProperty("Language", Any).SetValue(null, "en");
-        current.SetValue(null, null);
 
         // A spread of days for the chart, seeded after the count check above.
         var seeded = new System.Collections.Generic.List<string>();
@@ -197,23 +193,7 @@ static class DialogProbe
         Check("all 12 pictures are in the pool (saw " + seen.Count + ")", seen.Count == 12);
         Check("the same picture never shows twice in a row", !repeated);
 
-        // Lock-screen panel, drawn on the normal desktop because the real one needs SYSTEM.
-        string state = Path.Combine(data, "lockstate.txt");
-        File.WriteAllText(state, "");
-        CallStatic("LockScreenTimer", "Publish", DateTime.UtcNow.AddSeconds(95), 120);
-        Process panel = Process.Start(exe, "--test --data-dir \"" + data + "\" --lock-overlay");
-        Thread.Sleep(1800);
-        Rectangle all = SystemInformation.VirtualScreen;
-        using (var bmp = new Bitmap(all.Width, all.Height))
-        {
-            using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(all.Location, Point.Empty, all.Size);
-            bmp.Save(Path.Combine(outDir, "lock-panel.png"), ImageFormat.Png);
-        }
-        Check("lock-screen panel stays up while a break is published", !panel.HasExited);
-        CallStatic("LockScreenTimer", "Clear");
-        bool gone = panel.WaitForExit(5000);
-        Check("lock-screen panel exits when the break is cleared", gone);
-        if (!gone) panel.Kill();
+        Check("lock-screen timer code is gone", app.GetType("StandUp.LockScreenTimer") == null && app.GetType("StandUp.LockTimerForm") == null);
 
         Console.WriteLine(failures == 0 ? "ALL PASSED" : failures + " FAILED");
         return failures;

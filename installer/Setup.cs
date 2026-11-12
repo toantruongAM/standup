@@ -10,8 +10,8 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("StandUp Setup")]
 [assembly: AssemblyProduct("StandUp")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace StandUpSetup
 {
@@ -19,7 +19,7 @@ namespace StandUpSetup
     static class Installer
     {
         public const string Title = "StandUp Setup";
-        const string Version = "1.1.0";
+        const string Version = "1.2.0";
         const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\StandUp";
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
@@ -59,6 +59,22 @@ namespace StandUpSetup
                 key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
                 key.SetValue("EstimatedSize", (int)(new FileInfo(AppExe).Length / 1024), RegistryValueKind.DWord);
             }
+        }
+
+        /// <summary>Any StandUp running, wherever it was started from. Only one copy can run at a time.</summary>
+        public static bool AnyStandUpRunning()
+        {
+            Process[] running = Process.GetProcessesByName("StandUp");
+            foreach (Process p in running) p.Dispose();
+            return running.Length > 0;
+        }
+
+        /// <summary>StandUp 1.0 and 1.1 could add a lock-screen timer. Version 1.2 dropped it, so offer to remove it.</summary>
+        public static void OfferLegacyCleanup()
+        {
+            if (!File.Exists(LockTimerExe)) return;
+            if (Ask("An older version of StandUp added a timer to the lock screen. That feature has been removed.\n\nRemove it from this PC now? Windows will ask for administrator approval.") == DialogResult.Yes)
+                RemoveLockScreenTimer();
         }
 
         public static void LaunchApp()
@@ -157,7 +173,7 @@ namespace StandUpSetup
             grid.Controls.Add(new Label { Text = "Install StandUp", AutoSize = true, Font = new Font(SystemFonts.MessageBoxFont.FontFamily, 13f, FontStyle.Bold), Margin = new Padding(3, 3, 3, 8) });
             grid.Controls.Add(new Label
             {
-                Text = "StandUp locks your screen for a short walk every hour, and a longer one every 3 hours. You'll choose a passcode when it first opens.\n\nIt installs for your account only and starts with Windows. English, Español and Tiếng Việt are included.",
+                Text = "StandUp locks your screen for a 1-minute walk every hour, and a 10-minute one every 3 hours. You'll choose a passcode when it first opens.\n\nIt installs for your account only and starts with Windows. English, Español and Tiếng Việt are included.",
                 AutoSize = true,
                 MaximumSize = new Size(380, 0),
                 Margin = new Padding(3, 3, 3, 14)
@@ -178,6 +194,11 @@ namespace StandUpSetup
 
         void RunInstall()
         {
+            if (Installer.AnyStandUpRunning())
+            {
+                Installer.Tell("StandUp is running. Close it from its tray icon (this needs your passcode), then click Install again.", MessageBoxIcon.Warning);
+                return;
+            }
             try
             {
                 Installer.Install();
@@ -193,6 +214,7 @@ namespace StandUpSetup
                 return;
             }
 
+            Installer.OfferLegacyCleanup();
             Installer.LaunchApp();
             DialogResult = DialogResult.OK;
         }
@@ -210,6 +232,7 @@ namespace StandUpSetup
             if (args.Contains("--uninstall")) return Installer.Uninstall(silent);
             if (silent)
             {
+                if (Installer.AnyStandUpRunning()) return 2;
                 Installer.Install();
                 return 0;
             }

@@ -71,6 +71,9 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+fieldset { border: none; border-bottom: 1px solid var(--border); margin: 0 0 12px; padding: 0 0 4px; }
+legend { font-weight: 700; padding: 0; margin-bottom: 8px; }
+fieldset label.row { padding-left: 14px; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .error { color: var(--error); min-height: 18px; margin: 0 0 4px; }
 .section { margin-top: 16px; }

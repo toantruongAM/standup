@@ -37,7 +37,8 @@ namespace StandUp
         const int Iterations = 100000;
 
         public decimal WorkMinutes = 60;
-        public decimal BreakMinutes = 2;
+        public decimal BreakMinutes = 1;
+        public int MaxSnoozes = 2;
         public decimal LongEveryMinutes = 180;
         public decimal LongBreakMinutes = 10;
         public decimal SnoozeMinutes = 2;
@@ -57,7 +58,8 @@ namespace StandUp
                 BreakSeconds = (int)(BreakMinutes * 60),
                 LongEverySeconds = (int)(LongEveryMinutes * 60),
                 LongBreakSeconds = (int)(LongBreakMinutes * 60),
-                SnoozeSeconds = (int)(SnoozeMinutes * 60)
+                SnoozeSeconds = (int)(SnoozeMinutes * 60),
+                MaxSnoozes = MaxSnoozes
             };
         }
 
@@ -109,6 +111,11 @@ namespace StandUp
                     case "longBreak": settings.LongBreakMinutes = ParseMinutes(value, settings.LongBreakMinutes); break;
                     case "idle": settings.IdleMinutes = ParseMinutes(value, settings.IdleMinutes); break;
                     case "lang": settings.Language = value; break;
+                    case "snoozes":
+                        int snoozes;
+                        if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out snoozes) && snoozes >= 0 && snoozes <= 10)
+                            settings.MaxSnoozes = snoozes;
+                        break;
                     case "autostart": settings.StartWithWindows = value == "1"; break;
                     case "salt": settings.PasscodeSalt = value; break;
                     case "hash": settings.PasscodeHash = value; break;
@@ -136,6 +143,7 @@ namespace StandUp
                 "longBreak=" + LongBreakMinutes.ToString(CultureInfo.InvariantCulture),
                 "idle=" + IdleMinutes.ToString(CultureInfo.InvariantCulture),
                 "lang=" + Language,
+                "snoozes=" + MaxSnoozes.ToString(CultureInfo.InvariantCulture),
                 "autostart=" + (StartWithWindows ? "1" : "0"),
                 "salt=" + PasscodeSalt,
                 "hash=" + PasscodeHash

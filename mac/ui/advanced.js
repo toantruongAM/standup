@@ -9,6 +9,7 @@ async function load() {
   await loadStrings();
   const a = await invoke('get_advanced');
   byId('idle').value = a.idle_minutes;
+  byId('snoozes').value = a.max_snoozes;
   const select = byId('language');
   for (const option of a.languages) {
     const item = document.createElement('option');
@@ -61,7 +62,8 @@ byId('form').addEventListener('submit', async (event) => {
   event.preventDefault();
   error.textContent = '';
   try {
-    await invoke('save_advanced', { idle: Number(byId('idle').value), language: byId('language').value });
+    const snoozes = Math.round(Number(byId('snoozes').value));
+    await invoke('save_advanced', { idle: Number(byId('idle').value), snoozes: Math.max(0, Math.min(10, snoozes)), language: byId('language').value });
     await invoke('close_self');
   } catch (message) {
     error.textContent = message;

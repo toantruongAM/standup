@@ -474,6 +474,7 @@ struct LanguageOption {
 #[derive(Serialize)]
 struct AdvancedView {
     idle_minutes: f64,
+    max_snoozes: u32,
     language: String,
     languages: Vec<LanguageOption>,
     built_in_pictures: usize,
@@ -485,6 +486,7 @@ fn get_advanced(shared: State<'_, Shared>) -> AdvancedView {
     let core = shared.lock().expect("core lock");
     AdvancedView {
         idle_minutes: core.settings.idle_minutes,
+        max_snoozes: core.settings.max_snoozes,
         language: core.lang().to_string(),
         languages: i18n::LANGUAGES.iter().map(|code| LanguageOption { code: code.to_string(), name: i18n::t(code, "lang.name") }).collect(),
         built_in_pictures: core.photos.built_in_count(),
@@ -494,7 +496,7 @@ fn get_advanced(shared: State<'_, Shared>) -> AdvancedView {
 
 /// Saves the advanced settings. A new language is applied everywhere at once.
 #[tauri::command]
-fn save_advanced(app: AppHandle, shared: State<'_, Shared>, idle: f64, language: String) -> Result<(), String> {
+fn save_advanced(app: AppHandle, shared: State<'_, Shared>, idle: f64, snoozes: u32, language: String) -> Result<(), String> {
     let mut core = shared.lock().expect("core lock");
     if !idle.is_finite() || !(1.0..=60.0).contains(&idle) {
         return Err(i18n::t(core.lang(), "advanced.invalidIdle"));
@@ -502,9 +504,12 @@ fn save_advanced(app: AppHandle, shared: State<'_, Shared>, idle: f64, language:
     let language = i18n::valid(&language).to_string();
     let changed = language != core.lang();
     core.settings.idle_minutes = idle;
+    core.settings.max_snoozes = snoozes.min(10);
     core.settings.language = language.clone();
     let path = core.settings_path.clone();
     core.settings.save(&path).map_err(|e| e.to_string())?;
+    let config = core.settings.engine_config();
+    core.engine.apply_config(config, now_ms());
     drop(core);
 
     if changed {

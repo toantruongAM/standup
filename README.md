@@ -4,18 +4,13 @@ A Windows tray app that makes you stop working, stand up and walk. It needs noth
 
 Looking for the Mac version? See [mac/README.md](mac/README.md).
 
-## Start it
+## Install
 
-Put `dist\StandUp.exe` somewhere permanent and double-click it. It asks you to choose a passcode, then runs in the tray.
-"Start with Windows" points at wherever the exe was last run from, so run it again if you move it.
+Run `release\StandUp-Setup.exe` (built by `package.cmd`). It installs to `%LOCALAPPDATA%\Programs\StandUp` for the current
+user, adds a Start menu shortcut and an Installed apps entry, and starts StandUp, which asks for a passcode the first time.
 
-## Lock-screen timer
-
-Normal apps can't draw on the Windows lock screen. Tray icon > Settings > **Turn on lock-screen timer** asks for
-administrator approval once. It copies the exe to `C:\Program Files\StandUp` and adds a scheduled task that runs as SYSTEM
-each time the PC locks. That task exits at once unless a break is running. Once it's on, the button disappears from Settings.
-To remove it, run `StandUp.exe --uninstall-lock-timer` as administrator. Problems are logged to `C:\ProgramData\StandUp\lock.log`.
-To update the copy after rebuilding the exe, run that command, then turn the timer on again.
+Versions 1.0 and 1.1 could add a timer to the lock screen. Version 1.2 removed it. The installer offers to clean it up, or you
+can run `StandUp.exe --uninstall-lock-timer` as administrator.
 
 ## Presenting
 
@@ -38,5 +33,6 @@ Forgot the passcode? End StandUp in Task Manager, delete the `salt=` and `hash=`
 
 ## Build and test
 
-`build.cmd` compiles `dist\StandUp.exe` with the C# compiler included in Windows. `art\generate.html` draws the built-in pictures.
+`build.cmd` compiles `dist\StandUp.exe` with the C# compiler included in Windows, and `package.cmd` wraps it into the installer.
+`art\generate.html` draws the built-in pictures in each language, and `i18n\strings.json` holds the text for both apps.
 `tests\EngineTests.cs` covers the timing rules. `tests\LiveProbe.cs` drives the real break screen and covers your display for about 30 seconds.

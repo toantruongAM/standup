@@ -167,9 +167,6 @@ namespace StandUp
     sealed class SettingsForm : Form
     {
         readonly AppSettings _settings;
-        readonly Button _lockButton;
-        readonly Label _lockStatus;
-
         public SettingsForm(AppSettings settings)
         {
             _settings = settings;
@@ -182,16 +179,16 @@ namespace StandUp
             NumericUpDown longLength = Ui.Minutes(settings.LongBreakMinutes, 0.5m, 60, 1);
             NumericUpDown snooze = Ui.Minutes(settings.SnoozeMinutes, 0.5m, 60, 1);
 
-            grid.Controls.Add(Ui.Label(L10n.T("settings.shortEvery")));
-            grid.Controls.Add(shortEvery);
-            grid.Controls.Add(Ui.Label(L10n.T("settings.shortLength")));
-            grid.Controls.Add(shortLength);
-            grid.Controls.Add(Ui.Label(L10n.T("settings.longEvery")));
-            grid.Controls.Add(longEvery);
-            grid.Controls.Add(Ui.Label(L10n.T("settings.longLength")));
-            grid.Controls.Add(longLength);
-            grid.Controls.Add(Ui.Label(L10n.T("settings.snooze")));
-            grid.Controls.Add(snooze);
+            // Three groups, each with a bold heading and a rule above it, so they're easy to tell apart.
+            Group(grid, L10n.T("settings.shortGroup"), false);
+            Row(grid, L10n.T("settings.every"), shortEvery);
+            Row(grid, L10n.T("settings.length"), shortLength);
+            Group(grid, L10n.T("settings.longGroup"), true);
+            Row(grid, L10n.T("settings.every"), longEvery);
+            Row(grid, L10n.T("settings.length"), longLength);
+            Group(grid, L10n.T("settings.snoozeGroup"), true);
+            Row(grid, L10n.T("settings.length"), snooze);
+            Group(grid, null, true);
 
             var autostart = new CheckBox { Text = L10n.T("settings.autostartWindows"), AutoSize = true, Checked = settings.StartWithWindows, Margin = new Padding(3, 10, 3, 3) };
             Ui.Span(grid, autostart);
@@ -208,13 +205,6 @@ namespace StandUp
             buttonsRow.Controls.Add(passcode);
             buttonsRow.Controls.Add(advanced);
             Ui.Span(grid, buttonsRow);
-
-            _lockStatus = new Label { AutoSize = true, Margin = new Padding(3, 14, 3, 3), MaximumSize = new Size(400, 0) };
-            _lockButton = new Button { AutoSize = true };
-            _lockButton.Click += delegate { InstallLockScreenTimer(); };
-            Ui.Span(grid, _lockStatus);
-            Ui.Span(grid, _lockButton);
-            RefreshLockScreenRow();
 
             Ui.Span(grid, Ui.Buttons(this, L10n.T("common.save"), true));
             Controls.Add(grid);
@@ -245,33 +235,38 @@ namespace StandUp
             DialogResult = DialogResult.Retry;
         }
 
-        void RefreshLockScreenRow()
+        /// <summary>A thin rule (unless first) and a bold heading across both columns.</summary>
+        static void Group(TableLayoutPanel grid, string heading, bool rule)
         {
-            // Hidden once it's on and up to date. Offered again if a newer StandUp needs to update it.
-            bool installed = LockScreenTimer.IsInstalled;
-            bool current = installed && LockScreenTimer.IsCurrent;
-            _lockStatus.Visible = _lockButton.Visible = !current;
-            _lockStatus.Text = L10n.T(installed ? "settings.lockOutdated" : "settings.lockOff");
-            _lockButton.Text = L10n.T(installed ? "settings.lockUpdate" : "settings.lockOn");
+            if (rule)
+            {
+                var line = new Label
+                {
+                    AutoSize = false,
+                    Height = 1,
+                    BackColor = SystemColors.ControlDark,
+                    Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                    Margin = new Padding(3, 10, 3, heading == null ? 0 : 6)
+                };
+                Ui.Span(grid, line);
+            }
+            if (heading == null) return;
+            var label = new Label
+            {
+                Text = heading,
+                AutoSize = true,
+                Font = new Font(SystemFonts.MessageBoxFont, FontStyle.Bold),
+                Margin = new Padding(3, rule ? 2 : 0, 3, 2)
+            };
+            Ui.Span(grid, label);
         }
 
-        void InstallLockScreenTimer()
+        static void Row(TableLayoutPanel grid, string text, Control input)
         {
-            try
-            {
-                using (Process process = Process.Start(new ProcessStartInfo(Application.ExecutablePath, "--install-lock-timer") { Verb = "runas", UseShellExecute = true }))
-                {
-                    process.WaitForExit();
-                    if (process.ExitCode != 0)
-                        MessageBox.Show(this, L10n.T("settings.lockFailed", process.ExitCode), "StandUp", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
-            }
-            catch (Win32Exception)
-            {
-                // The user declined the administrator prompt.
-            }
-            LockScreenTimer.Forget();
-            RefreshLockScreenRow();
+            Label label = Ui.Label(text);
+            label.Margin = new Padding(16, 7, 12, 7);
+            grid.Controls.Add(label);
+            grid.Controls.Add(input);
         }
     }
 
@@ -287,6 +282,10 @@ namespace StandUp
             NumericUpDown idle = Ui.Minutes(settings.IdleMinutes, 1, 60, 0);
             grid.Controls.Add(Ui.Label(L10n.T("advanced.idle")));
             grid.Controls.Add(idle);
+
+            NumericUpDown snoozes = Ui.Minutes(settings.MaxSnoozes, 0, 10, 0);
+            grid.Controls.Add(Ui.Label(L10n.T("advanced.snoozes")));
+            grid.Controls.Add(snoozes);
 
             var language = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140 };
             foreach (string code in L10n.Languages) language.Items.Add(L10n.NameOf(code));
@@ -318,6 +317,7 @@ namespace StandUp
                 string chosen = L10n.Languages[language.SelectedIndex];
                 LanguageChanged = chosen != settings.Language;
                 settings.IdleMinutes = idle.Value;
+                settings.MaxSnoozes = (int)snoozes.Value;
                 settings.Language = chosen;
                 settings.Save();
                 L10n.Language = chosen;

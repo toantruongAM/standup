@@ -91,7 +91,6 @@ namespace StandUp
             SystemEvents.PowerModeChanged += OnPowerChanged;
             SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
 
-            LockScreenTimer.Clear();
             _engine.Start(DateTime.UtcNow);
 
             _timer = new Timer { Interval = 250 };
@@ -182,9 +181,6 @@ namespace StandUp
 
             if (_engine.Phase == Phase.Break) ShowOverlays();
             else HideOverlays();
-
-            if (_engine.IsBreakPaused) LockScreenTimer.Publish(_engine.Deadline, _engine.CurrentBreakSeconds);
-            else LockScreenTimer.Clear();
         }
 
         void ShowOverlays()
@@ -302,12 +298,12 @@ namespace StandUp
                         result = form.ShowDialog();
                         if (form.LanguageChanged) ApplyLanguage();
                     }
-                    if (result == DialogResult.OK)
-                    {
-                        _engine.ApplyConfig(BuildConfig(), DateTime.UtcNow);
-                        if (!Program.TestMode) AutoStart.Apply(_settings.StartWithWindows, Application.ExecutablePath);
-                    }
+                    if (result == DialogResult.OK && !Program.TestMode)
+                        AutoStart.Apply(_settings.StartWithWindows, Application.ExecutablePath);
                 } while (result == DialogResult.Retry);
+
+                // Advanced settings (such as the snooze count) save on their own, so apply even after Cancel.
+                _engine.ApplyConfig(BuildConfig(), DateTime.UtcNow);
             }
             finally
             {
@@ -353,7 +349,6 @@ namespace StandUp
             SystemEvents.PowerModeChanged -= OnPowerChanged;
             SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
             HideOverlays();
-            LockScreenTimer.Clear();
             _tray.Visible = false;
             _tray.Dispose();
             ExitThread();

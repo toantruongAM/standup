@@ -22,6 +22,7 @@ pub struct Settings {
     pub long_every_minutes: f64,
     pub long_break_minutes: f64,
     pub snooze_minutes: f64,
+    pub max_snoozes: u32,
     pub idle_minutes: f64,
     pub language: String,
     pub start_with_mac: bool,
@@ -33,10 +34,11 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             work_minutes: 60.0,
-            break_minutes: 2.0,
+            break_minutes: 1.0,
             long_every_minutes: 180.0,
             long_break_minutes: 10.0,
             snooze_minutes: 2.0,
+            max_snoozes: 2,
             idle_minutes: 5.0,
             language: "en".to_string(),
             start_with_mac: true,
@@ -62,7 +64,7 @@ impl Settings {
             long_every_seconds: (self.long_every_minutes * 60.0) as i64,
             long_break_seconds: (self.long_break_minutes * 60.0) as i64,
             snooze_seconds: (self.snooze_minutes * 60.0) as i64,
-            ..Config::default()
+            max_snoozes: self.max_snoozes,
         }
     }
 

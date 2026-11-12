@@ -1,7 +1,7 @@
-StandUp 1.1
+StandUp 1.2
 ===========
 Sitting all day is bad for you. Every hour, StandUp freezes your screen for a
-2-minute walking break and shows you a funny picture. Every 3 hours of work,
+1-minute walking break and shows you a funny picture. Every 3 hours of work,
 the break is a longer one (10 minutes). A soft chime plays when a break starts
 and when it ends.
 
@@ -22,7 +22,8 @@ DURING A BREAK
 - Touching the keyboard or mouse restarts the break timer. Hands off!
 - Press Win+L to lock the PC and walk away. The break keeps counting.
 - Need a moment? Look for the small dim "snooze" along the bottom of your main
-  screen. It gives you 2 more minutes, and you get 2 snoozes per break.
+  screen. It gives you 2 more minutes, and you get 2 snoozes per break
+  (change the number in Advanced settings).
 
 
 WHEN THE CLOCK STOPS
@@ -34,10 +35,9 @@ WHEN THE CLOCK STOPS
 
 
 SETTINGS (right-click the tray icon; needs your passcode)
-Settings            Short and long break times, snooze, your passcode, and an
-                    optional timer on the lock screen (needs admin approval)
-Advanced settings   Time away before the clock pauses, language, and your own
-                    pictures
+Settings            Short and long break times, snooze length, your passcode
+Advanced settings   Time away before the clock pauses, snoozes per break,
+                    language, and your own pictures
 History             Charts of your breaks over time
 Exit                Needs your passcode
 

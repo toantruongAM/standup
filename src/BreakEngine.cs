@@ -7,7 +7,7 @@ namespace StandUp
     public sealed class EngineConfig
     {
         public int WorkSeconds = 3600;
-        public int BreakSeconds = 120;
+        public int BreakSeconds = 60;
         public int LongEverySeconds = 10800;
         public int LongBreakSeconds = 600;
         public int SnoozeSeconds = 120;

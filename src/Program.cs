@@ -18,20 +18,13 @@ namespace StandUp
             Application.SetCompatibleTextRenderingDefault(false);
 
             var test = new TestOptions();
-            bool lockOverlay = false;
             for (int i = 0; i < args.Length; i++)
             {
                 switch (args[i])
                 {
-                    case "--install-lock-timer": return LockScreenTimer.Install();
-                    case "--uninstall-lock-timer": return LockScreenTimer.Uninstall();
-                    case "--lock-launcher": return LockScreenTimer.RunLauncher();
-                    case "--lock-overlay": lockOverlay = true; break;
+                    case "--uninstall-lock-timer": return LegacyLockTimer.Uninstall();
                     case "--test": TestMode = true; Log.Enabled = true; break;
-                    case "--data-dir":
-                        Paths.DataDir = args[++i];
-                        LockScreenTimer.UseStateDir(args[i]);
-                        break;
+                    case "--data-dir": Paths.DataDir = args[++i]; break;
                     case "--work-seconds": test.WorkSeconds = int.Parse(args[++i]); break;
                     case "--break-seconds": test.BreakSeconds = int.Parse(args[++i]); break;
                     case "--snooze-seconds": test.SnoozeSeconds = int.Parse(args[++i]); break;
@@ -41,7 +34,6 @@ namespace StandUp
                     case "--language": test.Language = args[++i]; break;
                 }
             }
-            if (lockOverlay) return LockScreenTimer.RunOverlay();
 
             bool first;
             using (var instance = new Mutex(true, TestMode ? InstanceName + ".test" : InstanceName, out first))

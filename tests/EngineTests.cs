@@ -14,9 +14,9 @@ static class EngineTests
     }
 
     // Short break every 50 minutes for 2, long break after 3 hours for 10.
-    static BreakEngine New(out List<DateTime> done)
+    static BreakEngine New(out List<DateTime> done, int maxSnoozes = 2)
     {
-        var e = new BreakEngine(new EngineConfig { WorkSeconds = 3000 });
+        var e = new BreakEngine(new EngineConfig { WorkSeconds = 3000, BreakSeconds = 120, MaxSnoozes = maxSnoozes });
         var list = new List<DateTime>();
         e.BreakCompleted += (at, s) => list.Add(at);
         done = list;
@@ -35,7 +35,16 @@ static class EngineTests
     {
         List<DateTime> done;
 
-        Check("default short break is every hour", new EngineConfig().WorkSeconds == 3600);
+        Check("default short break is 1 minute every hour", new EngineConfig().WorkSeconds == 3600 && new EngineConfig().BreakSeconds == 60);
+        Check("default allows 2 snoozes", new EngineConfig().MaxSnoozes == 2);
+
+        var few = New(out done, 0);
+        var tf = Run(few, T0, 3000);
+        Check("with 0 snoozes allowed, no snooze", few.Phase == Phase.Break && !few.CanSnooze && !few.Snooze(tf));
+        few = New(out done, 3);
+        tf = Run(few, T0, 3000);
+        for (int i = 0; i < 3; i++) { few.Snooze(tf); tf = Run(few, tf, 120); }
+        Check("with 3 snoozes allowed, the 4th is refused", few.Phase == Phase.Break && few.SnoozesUsed == 3 && !few.Snooze(tf));
         Check("default long break is 10 minutes after 3 hours", new EngineConfig().LongBreakSeconds == 600 && new EngineConfig().LongEverySeconds == 10800);
 
         var e = New(out done);

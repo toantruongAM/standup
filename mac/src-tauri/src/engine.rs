@@ -25,7 +25,7 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        Config { work_seconds: 3600, break_seconds: 120, long_every_seconds: 10_800, long_break_seconds: 600, snooze_seconds: 120, max_snoozes: 2 }
+        Config { work_seconds: 3600, break_seconds: 60, long_every_seconds: 10_800, long_break_seconds: 600, snooze_seconds: 120, max_snoozes: 2 }
     }
 }
 
@@ -300,7 +300,11 @@ mod tests {
 
     /// Short break every 50 minutes for 2, long break after 3 hours for 10.
     fn new_engine() -> Engine {
-        let mut e = Engine::new(Config { work_seconds: 3000, ..Config::default() });
+        new_engine_with(2)
+    }
+
+    fn new_engine_with(max_snoozes: u32) -> Engine {
+        let mut e = Engine::new(Config { work_seconds: 3000, break_seconds: 120, max_snoozes, ..Config::default() });
         e.start(T0);
         e
     }
@@ -322,7 +326,23 @@ mod tests {
     #[test]
     fn defaults_are_hourly_short_and_three_hour_long() {
         let c = Config::default();
-        assert_eq!((c.work_seconds, c.break_seconds, c.long_every_seconds, c.long_break_seconds), (3600, 120, 10_800, 600));
+        assert_eq!((c.work_seconds, c.break_seconds, c.long_every_seconds, c.long_break_seconds), (3600, 60, 10_800, 600));
+        assert_eq!(c.max_snoozes, 2);
+    }
+
+    #[test]
+    fn snooze_count_is_configurable() {
+        let mut e = new_engine_with(0);
+        let t = run(&mut e, T0, 3000);
+        assert!(!e.snooze(t));
+        let mut e = new_engine_with(3);
+        let mut t = run(&mut e, T0, 3000);
+        for _ in 0..3 {
+            assert!(e.snooze(t));
+            t = run(&mut e, t, 120);
+        }
+        assert_eq!(e.phase, Phase::Break);
+        assert!(!e.snooze(t));
     }
 
     #[test]
