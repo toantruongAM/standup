@@ -8,6 +8,10 @@ GitHub builds it. Open this repository's **Actions** tab, choose the latest **Bu
 
 The app isn't notarized by Apple, so macOS blocks the first launch. Try to open it, then go to **System Settings > Privacy & Security** and click **Open Anyway**.
 
+## What it does
+
+The same as the Windows app: a 2-minute break every hour and a 10-minute break every 3 hours, chimes at the start and end, the work clock pausing while you're away (5 minutes by default), and English, Español and Tiếng Việt (Advanced settings). The text for both apps lives in `i18n/strings.json`.
+
 ## Differences from Windows
 
 | Feature | Mac |

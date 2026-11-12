@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
@@ -8,11 +9,21 @@ namespace StandUp
 {
     sealed class TestOptions
     {
-        public int? WorkSeconds, BreakSeconds, SnoozeSeconds, ExitAfterSeconds;
+        public int? WorkSeconds, BreakSeconds, SnoozeSeconds, ExitAfterSeconds, IdleSeconds, LongEverySeconds;
+        public string Language;
     }
 
     sealed class TrayApp : ApplicationContext
     {
+        const int PresentingCheckTicks = 8;   // every 2 seconds
+        static readonly TimeSpan PresentingEndDelay = TimeSpan.FromSeconds(10);   // ride out a slide show that is restarted
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct LastInputInfo { public uint Size; public uint Time; }
+
+        [DllImport("user32.dll")]
+        static extern bool GetLastInputInfo(ref LastInputInfo info);
+
         readonly AppSettings _settings;
         readonly TestOptions _test;
         readonly BreakEngine _engine;
@@ -21,11 +32,8 @@ namespace StandUp
         readonly Random _random = new Random();
         readonly List<OverlayForm> _overlays = new List<OverlayForm>();
         readonly NotifyIcon _tray;
-        readonly ToolStripMenuItem _status, _today, _breakNow;
+        readonly ToolStripMenuItem _status, _today, _breakNow, _settingsItem, _historyItem, _exitItem;
         readonly Timer _timer;
-
-        const int PresentingCheckTicks = 8;   // every 2 seconds
-        static readonly TimeSpan PresentingEndDelay = TimeSpan.FromSeconds(10);   // ride out a slide show that is restarted
 
         InputGuard _guard;
         Bitmap _photo;
@@ -39,9 +47,15 @@ namespace StandUp
             _test = test;
             _engine = new BreakEngine(BuildConfig());
             _engine.PhaseChanged += OnPhaseChanged;
+            _engine.BreakStarted += isLong =>
+            {
+                Chime.BreakStart();
+                Log.Write(isLong ? "long break started" : "break started");
+            };
             _engine.BreakCompleted += (at, seconds) =>
             {
                 _history.RecordBreak(at, seconds);
+                Chime.BreakEnd();
                 Log.Write("break completed");
             };
             _engine.Snoozed += at => _history.RecordSnooze(at, _engine.Config.SnoozeSeconds);
@@ -49,15 +63,18 @@ namespace StandUp
             var menu = new ContextMenuStrip();
             _status = new ToolStripMenuItem { Enabled = false };
             _today = new ToolStripMenuItem { Enabled = false };
-            _breakNow = new ToolStripMenuItem("Take a break now", null, delegate { _engine.TakeBreakNow(DateTime.UtcNow); });
+            _breakNow = new ToolStripMenuItem("", null, delegate { _engine.TakeBreakNow(DateTime.UtcNow); });
+            _settingsItem = new ToolStripMenuItem("", null, delegate { OpenSettings(); });
+            _historyItem = new ToolStripMenuItem("", null, delegate { OpenHistory(); });
+            _exitItem = new ToolStripMenuItem("", null, delegate { TryExit(); });
             menu.Items.Add(_status);
             menu.Items.Add(_today);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(_breakNow);
-            menu.Items.Add("Settings...", null, delegate { OpenSettings(); });
-            menu.Items.Add("History...", null, delegate { OpenHistory(); });
+            menu.Items.Add(_settingsItem);
+            menu.Items.Add(_historyItem);
             menu.Items.Add(new ToolStripSeparator());
-            menu.Items.Add("Exit...", null, delegate { TryExit(); });
+            menu.Items.Add(_exitItem);
             menu.Opening += delegate { RefreshTray(); };
 
             _tray = new NotifyIcon
@@ -68,6 +85,7 @@ namespace StandUp
                 Visible = true
             };
             _tray.DoubleClick += delegate { OpenHistory(); };
+            ApplyLanguage();
 
             SystemEvents.SessionSwitch += OnSessionSwitch;
             SystemEvents.PowerModeChanged += OnPowerChanged;
@@ -94,13 +112,25 @@ namespace StandUp
             if (_test.WorkSeconds.HasValue) config.WorkSeconds = _test.WorkSeconds.Value;
             if (_test.BreakSeconds.HasValue) config.BreakSeconds = _test.BreakSeconds.Value;
             if (_test.SnoozeSeconds.HasValue) config.SnoozeSeconds = _test.SnoozeSeconds.Value;
+            if (_test.LongEverySeconds.HasValue) config.LongEverySeconds = _test.LongEverySeconds.Value;
             return config;
+        }
+
+        void ApplyLanguage()
+        {
+            L10n.Language = _settings.Language;
+            _breakNow.Text = L10n.T("tray.takeBreak");
+            _settingsItem.Text = L10n.T("tray.settings");
+            _historyItem.Text = L10n.T("tray.history");
+            _exitItem.Text = L10n.T("tray.exit");
+            RefreshTray();
         }
 
         void OnTick(object sender, EventArgs e)
         {
             DateTime now = DateTime.UtcNow;
             CheckPresenting(now);
+            CheckIdle(now);
             _engine.Tick(now);
 
             foreach (OverlayForm overlay in _overlays) overlay.UpdateClock(now);
@@ -111,6 +141,18 @@ namespace StandUp
                 foreach (OverlayForm overlay in _overlays) overlay.KeepOnTop();
             }
             RefreshTray();
+        }
+
+        void CheckIdle(DateTime now)
+        {
+            var info = new LastInputInfo { Size = (uint)Marshal.SizeOf(typeof(LastInputInfo)) };
+            if (!GetLastInputInfo(ref info)) return;
+            uint idleMs = unchecked((uint)Environment.TickCount - info.Time);
+            double limitMs = _test.IdleSeconds.HasValue ? _test.IdleSeconds.Value * 1000.0 : (double)_settings.IdleMinutes * 60000;
+
+            bool idle = idleMs >= limitMs;
+            if (idle != _engine.IsIdle && _engine.Phase == Phase.Working) Log.Write(idle ? "idle" : "back from idle");
+            _engine.SetIdle(idle, now);
         }
 
         void CheckPresenting(DateTime now)
@@ -141,7 +183,7 @@ namespace StandUp
             if (_engine.Phase == Phase.Break) ShowOverlays();
             else HideOverlays();
 
-            if (_engine.IsBreakPaused) LockScreenTimer.Publish(_engine.Deadline, _engine.Config.BreakSeconds);
+            if (_engine.IsBreakPaused) LockScreenTimer.Publish(_engine.Deadline, _engine.CurrentBreakSeconds);
             else LockScreenTimer.Clear();
         }
 
@@ -207,24 +249,35 @@ namespace StandUp
 
         void RefreshTray()
         {
+            DateTime now = DateTime.UtcNow;
             string state;
             switch (_engine.Phase)
             {
-                case Phase.Break: state = "On a break"; break;
-                case Phase.Paused: state = _engine.IsPresenting ? "Paused while presenting" : "Paused while locked"; break;
+                case Phase.Break:
+                    state = L10n.T(_engine.IsLongBreak ? "tray.onLongBreak" : "tray.onBreak");
+                    break;
+                case Phase.Paused:
+                    state = L10n.T(_engine.IsPresenting ? "tray.pausedPresenting" : "tray.pausedLocked");
+                    break;
                 default:
-                    int minutes = (int)Math.Ceiling((_engine.Deadline - DateTime.UtcNow).TotalMinutes);
-                    state = "Next break in " + Math.Max(1, minutes) + " min" + (_engine.InSnooze ? " (snoozed)" : "");
+                    if (_engine.IsIdle)
+                    {
+                        state = L10n.T("tray.pausedIdle");
+                        break;
+                    }
+                    int minutes = Math.Max(1, (int)Math.Ceiling((_engine.Deadline - now).TotalMinutes));
+                    state = L10n.T(_engine.NextBreakIsLong(now) ? "tray.nextLongBreak" : "tray.nextBreak", minutes);
+                    if (_engine.InSnooze) state += " " + L10n.T("tray.snoozed");
                     break;
             }
 
             int breaks = _history.BreaksToday;
-            string today = "Breaks today: " + breaks;
+            string today = L10n.T("tray.breaksToday", breaks);
             if (_status.Text != state) _status.Text = state;
             if (_today.Text != today) _today.Text = today;
             _breakNow.Enabled = _engine.Phase == Phase.Working;
 
-            string tip = "StandUp: " + state + ", " + breaks + " today";
+            string tip = "StandUp: " + state;
             if (tip.Length > 63) tip = tip.Substring(0, 63);
             if (_tray.Text != tip) _tray.Text = tip;
         }
@@ -235,16 +288,26 @@ namespace StandUp
             _dialogOpen = true;
             try
             {
-                using (var gate = new PasscodeForm(_settings, "Enter your passcode to change settings."))
+                using (var gate = new PasscodeForm(_settings, L10n.T("passcode.settingsPrompt")))
                 {
                     if (gate.ShowDialog() != DialogResult.OK) return;
                 }
-                using (var form = new SettingsForm(_settings))
+
+                // A language change in Advanced settings reopens Settings in the new language.
+                DialogResult result;
+                do
                 {
-                    if (form.ShowDialog() != DialogResult.OK) return;
-                    _engine.ApplyConfig(BuildConfig(), DateTime.UtcNow);
-                    if (!Program.TestMode) AutoStart.Apply(_settings.StartWithWindows, Application.ExecutablePath);
-                }
+                    using (var form = new SettingsForm(_settings))
+                    {
+                        result = form.ShowDialog();
+                        if (form.LanguageChanged) ApplyLanguage();
+                    }
+                    if (result == DialogResult.OK)
+                    {
+                        _engine.ApplyConfig(BuildConfig(), DateTime.UtcNow);
+                        if (!Program.TestMode) AutoStart.Apply(_settings.StartWithWindows, Application.ExecutablePath);
+                    }
+                } while (result == DialogResult.Retry);
             }
             finally
             {
@@ -272,7 +335,7 @@ namespace StandUp
             _dialogOpen = true;
             try
             {
-                using (var form = new PasscodeForm(_settings, "Enter your passcode to close StandUp."))
+                using (var form = new PasscodeForm(_settings, L10n.T("passcode.closePrompt")))
                 {
                     if (form.ShowDialog() == DialogResult.OK) Shutdown();
                 }

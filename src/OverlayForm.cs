@@ -126,25 +126,25 @@ namespace StandUp
             if (!_primary)
             {
                 DrawText(g, _timerText, _timerFont, Accent, 0, h * 0.28f, w, h * 0.34f);
-                DrawText(g, "Go walk. This screen can wait.", _headFont, Foreground, 0, h * 0.62f, w, h * 0.1f);
+                DrawText(g, L10n.T("overlay.secondary"), _headFont, Foreground, 0, h * 0.62f, w, h * 0.1f);
                 DrawStatus(g, w, h * 0.74f, h * 0.05f);
                 return;
             }
 
-            DrawText(g, "Time to get up and walk.", _headFont, Foreground, 0, h * 0.025f, w, h * 0.09f);
+            DrawText(g, L10n.T(_engine.IsLongBreak ? "overlay.headlineLong" : "overlay.headline"), _headFont, Foreground, 0, h * 0.025f, w, h * 0.09f);
             DrawPhoto(g, w, h);
             DrawText(g, _timerText, _timerFont, Accent, 0, h * 0.745f, w, h * 0.135f);
             DrawStatus(g, w, h * 0.88f, h * 0.04f);
-            DrawText(g, "Press Win+L to lock the PC and walk away. The break keeps counting.", _hintFont, Muted, 0, h * 0.92f, w, h * 0.035f);
+            DrawText(g, L10n.T("overlay.hintWindows"), _hintFont, Muted, 0, h * 0.92f, w, h * 0.035f);
             if (_canSnooze) DrawSnooze(g, w, h);
         }
 
         void DrawStatus(Graphics g, float w, float top, float height)
         {
             if (_showRestarted)
-                DrawText(g, "You touched something, so the timer restarted. Hands off!", _hintFont, Warning, 0, top, w, height);
+                DrawText(g, L10n.T("overlay.restarted"), _hintFont, Warning, 0, top, w, height);
             else
-                DrawText(g, "Any key or mouse movement restarts the timer.", _hintFont, Muted, 0, top, w, height);
+                DrawText(g, L10n.T("overlay.status"), _hintFont, Muted, 0, top, w, height);
         }
 
         void DrawPhoto(Graphics g, float w, float h)
@@ -175,7 +175,7 @@ namespace StandUp
             float margin = w * 0.06f;
             int x = (int)(margin + _snoozePlace * (w - 2 * margin - rectW));
             _snoozeRect = new Rectangle(x, (int)(h - rectH * 1.6f), rectW, rectH);
-            DrawText(g, "snooze", _snoozeFont, _snoozeHot ? SnoozeHover : SnoozeIdle, _snoozeRect.X, _snoozeRect.Y, _snoozeRect.Width, _snoozeRect.Height);
+            DrawText(g, L10n.T("overlay.snooze"), _snoozeFont, _snoozeHot ? SnoozeHover : SnoozeIdle, _snoozeRect.X, _snoozeRect.Y, _snoozeRect.Width, _snoozeRect.Height);
         }
 
         static void DrawText(Graphics g, string text, Font font, Color color, float x, float y, float w, float h)

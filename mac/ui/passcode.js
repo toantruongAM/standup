@@ -1,26 +1,28 @@
-const { invoke } = window.__TAURI__.core;
 const mode = (window.STANDUP && window.STANDUP.mode) || 'exit';
 
 const first = document.getElementById('first');
 const second = document.getElementById('second');
 const error = document.getElementById('error');
 
-const copy = {
-  setup: ['Welcome to StandUp', "Choose a passcode. You'll need it to change settings or close the app."],
-  settings: ['Settings', 'Enter your passcode to change settings.'],
-  exit: ['Close StandUp', 'Enter your passcode to close StandUp.'],
+const COPY = {
+  setup: ['passcode.welcomeTitle', 'passcode.welcome'],
+  settings: ['passcode.settingsTitle', 'passcode.settingsPrompt'],
+  exit: ['passcode.closeTitle', 'passcode.closePrompt'],
 };
-document.getElementById('title').textContent = copy[mode][0];
-document.getElementById('intro').textContent = copy[mode][1];
-first.placeholder = mode === 'setup' ? 'New passcode' : 'Passcode';
-second.hidden = mode !== 'setup';
+
+loadStrings().then(() => {
+  document.getElementById('title').textContent = t(COPY[mode][0]);
+  document.getElementById('intro').textContent = t(COPY[mode][1]);
+  first.placeholder = t(mode === 'setup' ? 'passcode.new' : 'passcode.passcode');
+  second.hidden = mode !== 'setup';
+});
 
 document.getElementById('form').addEventListener('submit', async (event) => {
   event.preventDefault();
   error.textContent = '';
   if (mode === 'setup') {
     if (first.value !== second.value) {
-      error.textContent = "The two passcodes don't match.";
+      error.textContent = t('passcode.mismatch');
       return;
     }
     try {
@@ -32,7 +34,7 @@ document.getElementById('form').addEventListener('submit', async (event) => {
   }
   const accepted = await invoke('submit_passcode', { mode, passcode: first.value });
   if (!accepted) {
-    error.textContent = 'That passcode is not right.';
+    error.textContent = t('passcode.wrong');
     first.select();
   }
 });

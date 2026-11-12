@@ -64,7 +64,7 @@ function caption(text) {
   const size = rows.length > 1 ? 50 : 66;
   const y = rows.length > 1 ? 810 : 846;
   return `<rect y="744" width="1200" height="156" fill="#fffdf6"/><rect y="740" width="1200" height="8" fill="${INK}"/>` +
-    rows.map((r, i) => `<text x="600" y="${y + i * 62}" text-anchor="middle" font-family="Segoe Print, Comic Sans MS, sans-serif" font-weight="700" font-size="${size}" fill="${INK}">${r}</text>`).join('');
+    rows.map((r, i) => `<text x="600" y="${y + i * 62}" text-anchor="middle" font-family="Segoe Print, Comic Sans MS, sans-serif" font-weight="700" font-size="${size}" fill="${INK}" data-fit="1140">${r}</text>`).join('');
 }
 
 const SKIN = '#f8d0ac';
@@ -72,7 +72,7 @@ const scenes = [
   // 1. Dog fused to an office chair
   () => floor('#cfe3ee', '#b89b7a') +
     `<rect x="840" y="110" width="250" height="170" rx="8" fill="#fff" ${S}/>` + lines(['M870,240 L930,190 L975,220 L1055,140']) +
-    `<text x="965" y="100" text-anchor="middle" font-family="Segoe UI" font-weight="700" font-size="30" fill="${INK}">MY STEPS</text>` +
+    `<text x="965" y="100" text-anchor="middle" font-family="Segoe UI" font-weight="700" font-size="30" fill="${INK}" data-fit="240">${W.steps}</text>` +
     `<rect x="440" y="170" width="320" height="400" rx="46" fill="#4a5668" ${S}/>` +
     lines(['M440,190 L500,250 M500,170 L440,250 M470,175 L470,245'], 4, '#eee') + lines(['M756,195 L700,250 M700,172 L758,250 M730,175 L730,245'], 4, '#eee') +
     `<rect x="572" y="590" width="56" height="110" fill="#333" ${S}/><path d="M470,726 L730,726 M600,690 L470,726 M600,690 L730,726" stroke="${INK}" stroke-width="20" stroke-linecap="round"/><circle cx="470" cy="738" r="18" fill="#222"/><circle cx="730" cy="738" r="18" fill="#222"/>` +
@@ -126,10 +126,10 @@ const scenes = [
     at(600, 270, 1.75, babyHead({ eye: 'judge', mouth: 'flat' })),
   // 8. Baby manager
   () => floor('#dbe7f3', '#8d99ae') +
-    `<rect x="110" y="90" width="300" height="190" rx="8" fill="#fff" ${S}/>` + `<text x="260" y="146" text-anchor="middle" font-family="Segoe UI" font-weight="700" font-size="32" fill="${INK}">BUTT ACTIVITY</text>` + lines(['M150,180 H360', 'M150,250 L200,248 L260,252 L360,250'], 8, '#d13f4c') +
+    `<rect x="110" y="90" width="300" height="190" rx="8" fill="#fff" ${S}/>` + `<text x="260" y="146" text-anchor="middle" font-family="Segoe UI" font-weight="700" font-size="32" fill="${INK}" data-fit="280">${W.butt}</text>` + lines(['M150,180 H360', 'M150,250 L200,248 L260,252 L360,250'], 8, '#d13f4c') +
     `<path d="M410,740 C410,500 470,440 600,440 C730,440 790,500 790,740 Z" fill="#2f3b52" ${S}/><path d="M545,442 L600,560 L655,442 Z" fill="#fff" ${S}/><path d="M582,462 H618 L630,620 L600,660 L570,620 Z" fill="#e63946" ${S}/>` +
     `<rect x="720" y="430" width="230" height="290" rx="12" fill="#b5743a" ${S}/><rect x="745" y="465" width="180" height="235" fill="#fff" ${S}/><rect x="790" y="412" width="90" height="42" rx="8" fill="#ccc" ${S}/>` +
-    `<text x="835" y="530" text-anchor="middle" font-family="Segoe UI" font-weight="800" font-size="38" fill="#d13f4c">F</text><text x="835" y="584" text-anchor="middle" font-family="Segoe UI" font-weight="600" font-size="24" fill="${INK}">needs to</text><text x="835" y="620" text-anchor="middle" font-family="Segoe UI" font-weight="600" font-size="24" fill="${INK}">walk more</text>` +
+    `<text x="835" y="530" text-anchor="middle" font-family="Segoe UI" font-weight="800" font-size="38" fill="#d13f4c">F</text><text x="848" y="584" text-anchor="middle" font-family="Segoe UI" font-weight="600" font-size="24" fill="${INK}" data-fit="136">${W.review1}</text><text x="848" y="620" text-anchor="middle" font-family="Segoe UI" font-weight="600" font-size="24" fill="${INK}" data-fit="136">${W.review2}</text>` +
     limb('M748,530 L738,640', '#2f3b52', 54) + `<circle cx="738" cy="668" r="34" fill="${SKIN}" ${S}/>` +
     at(600, 270, 1.5, babyHead({ eye: 'judge', mouth: 'smirk', hair: '#2b2320' })) +
     `<circle cx="534" cy="252" r="52" fill="none" ${S} stroke-width="9"/><circle cx="666" cy="252" r="52" fill="none" ${S} stroke-width="9"/><path d="M586,252 H614" ${S} stroke-width="9"/>`,
@@ -168,7 +168,7 @@ const scenes = [
   // 12. Baby and dog hold a meeting at the door
   () => floor('#d8f3dc', '#b08968') +
     `<rect x="830" y="110" width="290" height="530" fill="#8ecae6" ${S}/><path d="M830,540 C920,480 1020,520 1120,470 V640 H830 Z" fill="#74c69d"/><circle cx="1040" cy="210" r="46" fill="#ffd166"/>` +
-    `<rect x="840" y="30" width="270" height="66" rx="8" fill="#2d6a4f" ${S}/><text x="975" y="80" text-anchor="middle" font-family="Segoe UI" font-weight="800" font-size="42" fill="#fff">OUTSIDE</text>` +
+    `<rect x="840" y="30" width="270" height="66" rx="8" fill="#2d6a4f" ${S}/><text x="975" y="80" text-anchor="middle" font-family="Segoe UI" font-weight="800" font-size="42" fill="#fff" data-fit="250">${W.outside}</text>` +
     `<ellipse cx="290" cy="560" rx="125" ry="125" fill="${SKIN}" ${S}/>` + diaper(290, 620, 122, 80) + `<ellipse cx="230" cy="725" rx="52" ry="24" fill="${SKIN}" ${S}/><ellipse cx="350" cy="725" rx="52" ry="24" fill="${SKIN}" ${S}/>` +
     limb('M380,520 L560,400', SKIN, 46) + limb('M560,400 L800,350', SKIN, 0) + limb('M180,540 L140,640', SKIN, 46) +
     at(290, 325, 1.4, babyHead({ eye: 'judge', mouth: 'flat' })) +
@@ -176,21 +176,69 @@ const scenes = [
     at(670, 330, 1.25, dogHead({ fur: '#f2c078', ear: '#c98a4b', eye: 'judge', mouth: 'flat' }))
 ];
 
-const captions = [
-  'This is you. Please get up.',
-  'I have been watching you sit.',
-  'I even brought the leash.',
-  'Stretch like you mean it.',
-  'ON YOUR FEET, SOLDIER!',
-  'Follow this butt.',
-  'I learned to walk last week.|What is your excuse?',
-  'Your performance review is in.',
-  'Do you even walk, bro?',
-  'I am crawling and still|out-moving you.',
-  'Yee-haw! Walk break!',
-  'We held a meeting.|You are walking.'
-];
+// Words inside the pictures, then the captions, per language. '|' splits a caption over two lines.
+const WORDS = {
+  en: { steps: 'MY STEPS', butt: 'BUTT ACTIVITY', review1: 'needs to', review2: 'walk more', outside: 'OUTSIDE' },
+  es: { steps: 'MIS PASOS', butt: 'ACTIVIDAD DEL TRASERO', review1: 'necesita', review2: 'caminar más', outside: 'AFUERA' },
+  vi: { steps: 'SỐ BƯỚC CHÂN', butt: 'HOẠT ĐỘNG CỦA MÔNG', review1: 'cần đi bộ', review2: 'nhiều hơn', outside: 'RA NGOÀI' }
+};
 
-const n = Math.max(1, Math.min(scenes.length, parseInt(location.hash.slice(1), 10) || 1));
-document.body.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">${scenes[n-1]()}${caption(captions[n-1])}</svg>`;
+const CAPTIONS = {
+  en: [
+    'This is you. Please get up.',
+    'I have been watching you sit.',
+    'I even brought the leash.',
+    'Stretch like you mean it.',
+    'ON YOUR FEET, SOLDIER!',
+    'Follow this butt.',
+    'I learned to walk last week.|What is your excuse?',
+    'Your performance review is in.',
+    'Do you even walk, bro?',
+    'I am crawling and still|out-moving you.',
+    'Yee-haw! Walk break!',
+    'We held a meeting.|You are walking.'
+  ],
+  es: [
+    'Este eres tú. Levántate, por favor.',
+    'Llevo un buen rato viéndote sentado.',
+    'Hasta te traje la correa.',
+    'Estírate con ganas.',
+    '¡DE PIE, SOLDADO!',
+    'Sigue a este trasero.',
+    'Aprendí a caminar la semana pasada.|¿Cuál es tu excusa?',
+    'Ya llegó tu evaluación.',
+    '¿Y tú caminas o qué, bro?',
+    'Voy gateando y aun así|me muevo más que tú.',
+    '¡Yija! ¡A caminar!',
+    'Hicimos una reunión.|Te toca caminar.'
+  ],
+  vi: [
+    'Đây là bạn đó. Đứng dậy đi nào.',
+    'Tui thấy bạn ngồi lâu lắm rồi.',
+    'Tui mang sẵn dây dắt rồi đây.',
+    'Vươn vai cho thật đã nào.',
+    'ĐỨNG DẬY, CHIẾN SĨ!',
+    'Đi theo cái mông này.',
+    'Tuần trước tui mới biết đi.|Còn bạn thì sao?',
+    'Kết quả đánh giá của bạn đây.',
+    'Đi bộ nổi không đó, bạn ơi?',
+    'Tui còn đang bò mà|vẫn năng động hơn bạn.',
+    'Yee-haw! Đi dạo thôi!',
+    'Bọn tui đã họp xong.|Bạn phải đi bộ.'
+  ]
+};
+
+// Open with #3 or #3-es: scene number, then language.
+const [sceneText, langText] = location.hash.slice(1).split('-');
+const lang = CAPTIONS[langText] ? langText : 'en';
+const W = WORDS[lang];
+const n = Math.max(1, Math.min(scenes.length, parseInt(sceneText, 10) || 1));
+document.body.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">${scenes[n-1]()}${caption(CAPTIONS[lang][n-1])}</svg>`;
+
+// Longer translations shrink to fit their space.
+document.querySelectorAll('[data-fit]').forEach((el) => {
+  const max = Number(el.dataset.fit);
+  let size = Number(el.getAttribute('font-size'));
+  while (el.getComputedTextLength() > max && size > 8) el.setAttribute('font-size', --size);
+});
 </script>

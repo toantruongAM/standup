@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>StandUp</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  select { background: var(--control); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font: inherit; }
+  label.row span { padding-right: 12px; }
+</style>
+</head>
+<body>
+<form id="form">
+  <label class="row"><span data-i18n="advanced.idle"></span> <input id="idle" type="number" min="1" max="60" step="1"></label>
+  <label class="row"><span data-i18n="advanced.language"></span> <select id="language"></select></label>
+
+  <div class="section">
+    <p id="pool"></p>
+    <button type="button" id="add" data-i18n="advanced.addPictures"></button>
+    <input id="picker" type="file" accept="image/*,.heic" multiple hidden>
+    <button type="button" id="open" class="link" data-i18n="advanced.openFolder"></button>
+  </div>
+
+  <p id="error" class="error section" role="alert"></p>
+  <div class="actions">
+    <button type="button" id="cancel" data-i18n="common.cancel"></button>
+    <button type="submit" class="primary" data-i18n="common.save"></button>
+  </div>
+</form>
+<script src="common.js"></script>
+<script src="advanced.js"></script>
+</body>
+</html>

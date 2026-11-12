@@ -1,12 +1,14 @@
-// StandUp for Mac. The break rules are in engine.rs and the Mac system calls in platform.rs.
+// StandUp for Mac. The break rules are in engine.rs, text in i18n.rs, and the Mac system calls in platform.rs.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod engine;
+mod i18n;
 mod platform;
 mod storage;
 
 use engine::{Engine, Event, Phase};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,14 +16,16 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use storage::{DayStats, History, PhotoPool, Settings};
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::image::Image;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, RunEvent, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent, Wry};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
 const MIN_PASSCODE: usize = 4;
 const PRESENTING_END_DELAY_MS: i64 = 10_000;
+const START_SOUND: &[u8] = include_bytes!("../../../art/sounds/break-start.wav");
+const END_SOUND: &[u8] = include_bytes!("../../../art/sounds/break-end.wav");
 
 struct Core {
     engine: Engine,
@@ -29,10 +33,18 @@ struct Core {
     settings_path: PathBuf,
     history: History,
     photos: PhotoPool,
+    start_sound: PathBuf,
+    end_sound: PathBuf,
     started: bool,
     presenting_seen: i64,
     overlays_up: bool,
     overlay_count: usize,
+}
+
+impl Core {
+    fn lang(&self) -> &str {
+        i18n::valid(&self.settings.language)
+    }
 }
 
 type Shared = Arc<Mutex<Core>>;
@@ -41,6 +53,9 @@ struct TrayItems {
     status: MenuItem<Wry>,
     today: MenuItem<Wry>,
     take_break: MenuItem<Wry>,
+    settings: MenuItem<Wry>,
+    history: MenuItem<Wry>,
+    exit: MenuItem<Wry>,
 }
 
 /// Latest answer from the slide-show watcher thread.
@@ -75,7 +90,7 @@ fn spawn_clock(app: AppHandle) {
             if count % 4 == 0 {
                 let locked = platform::screen_is_locked();
                 if locked && !was_locked {
-                    core.engine.lock();
+                    core.engine.lock(now);
                 } else if !locked && was_locked {
                     core.engine.unlock(now);
                 }
@@ -89,10 +104,18 @@ fn spawn_clock(app: AppHandle) {
                 core.engine.set_presenting(false, now);
             }
 
+            let away = platform::idle_seconds() >= core.settings.idle_minutes * 60.0;
+            core.engine.set_idle(away, now);
+
             core.engine.tick(now);
+            let mut sounds = Vec::new();
             for event in core.engine.take_events() {
                 match event {
-                    Event::BreakCompleted { at, seconds } => core.history.record(at, "break", seconds),
+                    Event::BreakStarted { .. } => sounds.push(core.start_sound.clone()),
+                    Event::BreakCompleted { at, seconds } => {
+                        core.history.record(at, "break", seconds);
+                        sounds.push(core.end_sound.clone());
+                    }
                     Event::Snoozed { at, seconds } => core.history.record(at, "snooze", seconds),
                 }
             }
@@ -101,10 +124,15 @@ fn spawn_clock(app: AppHandle) {
             let (overlays_up, overlay_count) = (core.overlays_up, core.overlay_count);
             let keep_active = on_break && count % 4 == 0;
 
+            let lang = core.lang().to_string();
             let status = status_text(&core, now);
             let breaks = core.history.breaks_today();
             let working = core.engine.phase == Phase::Working;
             drop(core);
+
+            for sound in sounds {
+                platform::play_sound(&sound);
+            }
 
             // Asking for the monitors waits on the main thread, so the lock must already be released.
             let needs_sync = on_break != overlays_up
@@ -117,12 +145,12 @@ fn spawn_clock(app: AppHandle) {
                 let _ = app.run_on_main_thread(platform::activate);
             }
 
-            let line = format!("{status}|{breaks}|{working}");
+            let line = format!("{lang}|{status}|{breaks}|{working}");
             if line != last_status {
                 last_status = line;
                 let items = app.state::<TrayItems>();
                 let _ = items.status.set_text(status);
-                let _ = items.today.set_text(format!("Breaks today: {breaks}"));
+                let _ = items.today.set_text(i18n::f(&lang, "tray.breaksToday", &[&breaks.to_string()]));
                 let _ = items.take_break.set_enabled(working);
             }
         }
@@ -130,15 +158,32 @@ fn spawn_clock(app: AppHandle) {
 }
 
 fn status_text(core: &Core, now: i64) -> String {
-    match core.engine.phase {
-        Phase::Break => "On a break".to_string(),
-        Phase::Paused if core.engine.is_presenting() => "Paused while presenting".to_string(),
-        Phase::Paused => "Paused while locked".to_string(),
+    let lang = core.lang();
+    let engine = &core.engine;
+    match engine.phase {
+        Phase::Break if engine.is_long_break => i18n::t(lang, "tray.onLongBreak"),
+        Phase::Break => i18n::t(lang, "tray.onBreak"),
+        Phase::Paused if engine.is_presenting() => i18n::t(lang, "tray.pausedPresenting"),
+        Phase::Paused => i18n::t(lang, "tray.pausedLocked"),
+        Phase::Working if engine.is_idle() => i18n::t(lang, "tray.pausedIdle"),
         Phase::Working => {
-            let minutes = ((core.engine.deadline - now) as f64 / 60_000.0).ceil().max(1.0) as i64;
-            format!("Next break in {minutes} min{}", if core.engine.in_snooze { " (snoozed)" } else { "" })
+            let minutes = ((engine.deadline - now) as f64 / 60_000.0).ceil().max(1.0) as i64;
+            let key = if engine.next_break_is_long(now) { "tray.nextLongBreak" } else { "tray.nextBreak" };
+            let mut text = i18n::f(lang, key, &[&minutes.to_string()]);
+            if engine.in_snooze {
+                text = format!("{text} {}", i18n::t(lang, "tray.snoozed"));
+            }
+            text
         }
     }
+}
+
+fn apply_tray_language(app: &AppHandle, lang: &str) {
+    let items = app.state::<TrayItems>();
+    let _ = items.take_break.set_text(i18n::t(lang, "tray.takeBreak"));
+    let _ = items.settings.set_text(i18n::t(lang, "tray.settings"));
+    let _ = items.history.set_text(i18n::t(lang, "tray.history"));
+    let _ = items.exit.set_text(i18n::t(lang, "tray.exit"));
 }
 
 // ---- break screens ----
@@ -181,7 +226,7 @@ fn sync_overlays(app: &AppHandle) {
         let (width, height) = (monitor.size().width as f64 / scale, monitor.size().height as f64 / scale);
 
         let built = WebviewWindowBuilder::new(app, format!("overlay-{index}"), WebviewUrl::App("overlay.html".into()))
-            .title("StandUp break")
+            .title("StandUp")
             .initialization_script(format!("window.STANDUP = {{ primary: {is_primary} }};").as_str())
             .decorations(false)
             .resizable(false)
@@ -216,6 +261,7 @@ struct BreakState {
     left_ms: i64,
     can_snooze: bool,
     restarted: bool,
+    long: bool,
 }
 
 #[tauri::command]
@@ -226,6 +272,7 @@ fn break_state(shared: State<'_, Shared>) -> BreakState {
         left_ms: (core.engine.deadline - now).max(0),
         can_snooze: core.engine.can_snooze(),
         restarted: now - core.engine.last_activity < 2000,
+        long: core.engine.is_long_break,
     }
 }
 
@@ -246,18 +293,33 @@ fn lock_screen() {
 
 #[tauri::command]
 fn next_photo(shared: State<'_, Shared>) -> Option<String> {
-    shared.lock().expect("core lock").photos.next()
+    let mut core = shared.lock().expect("core lock");
+    let lang = core.lang().to_string();
+    core.photos.next(&lang)
+}
+
+#[derive(Serialize)]
+struct UiStrings {
+    lang: String,
+    strings: HashMap<String, String>,
+}
+
+#[tauri::command]
+fn ui_strings(shared: State<'_, Shared>) -> UiStrings {
+    let lang = shared.lock().expect("core lock").lang().to_string();
+    UiStrings { strings: i18n::all(&lang), lang }
 }
 
 // ---- dialogs ----
 
-fn open_dialog(app: &AppHandle, label: &str, page: &str, title: &str, width: f64, height: f64, script: &str) {
+fn open_dialog(app: &AppHandle, label: &str, page: &str, title_key: &str, width: f64, height: f64, script: &str) {
     if let Some(existing) = app.get_webview_window(label) {
         let _ = existing.set_focus();
         return;
     }
+    let lang = app.state::<Shared>().lock().expect("core lock").lang().to_string();
     let built = WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
-        .title(title)
+        .title(i18n::t(&lang, title_key))
         .initialization_script(script)
         .inner_size(width, height)
         .resizable(false)
@@ -270,15 +332,20 @@ fn open_dialog(app: &AppHandle, label: &str, page: &str, title: &str, width: f64
 }
 
 fn open_passcode(app: &AppHandle, mode: &str) {
-    open_dialog(app, "passcode", "passcode.html", "StandUp", 380.0, 300.0, &format!("window.STANDUP = {{ mode: '{mode}' }};"));
+    open_dialog(app, "passcode", "passcode.html", "passcode.title", 400.0, 320.0, &format!("window.STANDUP = {{ mode: '{mode}' }};"));
 }
 
 fn open_settings(app: &AppHandle) {
-    open_dialog(app, "settings", "settings.html", "StandUp settings", 420.0, 470.0, "");
+    open_dialog(app, "settings", "settings.html", "settings.title", 460.0, 540.0, "");
 }
 
 fn open_history(app: &AppHandle) {
-    open_dialog(app, "history", "history.html", "StandUp history", 720.0, 520.0, "");
+    open_dialog(app, "history", "history.html", "history.title", 720.0, 520.0, "");
+}
+
+#[tauri::command]
+fn open_advanced(app: AppHandle) {
+    open_dialog(&app, "advanced", "advanced.html", "advanced.title", 460.0, 340.0, "");
 }
 
 fn begin(app: &AppHandle) {
@@ -321,13 +388,14 @@ fn submit_passcode(app: AppHandle, window: WebviewWindow, shared: State<'_, Shar
 
 #[tauri::command]
 fn set_passcode(app: AppHandle, window: WebviewWindow, shared: State<'_, Shared>, current: String, passcode: String) -> Result<(), String> {
-    if passcode.chars().count() < MIN_PASSCODE {
-        return Err(format!("Use at least {MIN_PASSCODE} characters."));
-    }
     let mut core = shared.lock().expect("core lock");
+    let lang = core.lang().to_string();
+    if passcode.chars().count() < MIN_PASSCODE {
+        return Err(i18n::f(&lang, "passcode.tooShort", &[&MIN_PASSCODE.to_string()]));
+    }
     let first_time = !core.settings.has_passcode();
     if !first_time && !core.settings.check_passcode(&current) {
-        return Err("The current passcode is not right.".to_string());
+        return Err(i18n::t(&lang, "passcode.currentWrong"));
     }
     core.settings.set_passcode(&passcode);
     let path = core.settings_path.clone();
@@ -345,42 +413,109 @@ fn set_passcode(app: AppHandle, window: WebviewWindow, shared: State<'_, Shared>
 struct SettingsView {
     work_minutes: f64,
     break_minutes: f64,
+    long_every_minutes: f64,
+    long_break_minutes: f64,
     snooze_minutes: f64,
     start_with_mac: bool,
-    built_in_pictures: usize,
-    your_pictures: usize,
 }
 
 #[tauri::command]
 fn get_settings(shared: State<'_, Shared>) -> SettingsView {
     let core = shared.lock().expect("core lock");
+    let s = &core.settings;
     SettingsView {
-        work_minutes: core.settings.work_minutes,
-        break_minutes: core.settings.break_minutes,
-        snooze_minutes: core.settings.snooze_minutes,
-        start_with_mac: core.settings.start_with_mac,
-        built_in_pictures: core.photos.built_in_count(),
-        your_pictures: core.photos.user_files().len(),
+        work_minutes: s.work_minutes,
+        break_minutes: s.break_minutes,
+        long_every_minutes: s.long_every_minutes,
+        long_break_minutes: s.long_break_minutes,
+        snooze_minutes: s.snooze_minutes,
+        start_with_mac: s.start_with_mac,
     }
 }
 
 #[tauri::command]
-fn save_settings(app: AppHandle, shared: State<'_, Shared>, work: f64, rest: f64, snooze: f64, autostart: bool) -> Result<(), String> {
+fn save_settings(
+    app: AppHandle,
+    shared: State<'_, Shared>,
+    work: f64,
+    rest: f64,
+    long_every: f64,
+    long_rest: f64,
+    snooze: f64,
+    autostart: bool,
+) -> Result<(), String> {
     let valid = |value: f64, min: f64, max: f64| value.is_finite() && value >= min && value <= max;
-    if !valid(work, 1.0, 480.0) || !valid(rest, 0.5, 60.0) || !valid(snooze, 0.5, 60.0) {
-        return Err("Work time must be 1 to 480 minutes. Break and snooze must be 0.5 to 60 minutes.".to_string());
-    }
     let mut core = shared.lock().expect("core lock");
-    core.settings.work_minutes = work;
-    core.settings.break_minutes = rest;
-    core.settings.snooze_minutes = snooze;
-    core.settings.start_with_mac = autostart;
+    if !valid(work, 1.0, 480.0) || !valid(long_every, 1.0, 480.0) || !valid(rest, 0.5, 60.0) || !valid(long_rest, 0.5, 60.0) || !valid(snooze, 0.5, 60.0) {
+        return Err(i18n::t(core.lang(), "settings.invalid"));
+    }
+    let s = &mut core.settings;
+    s.work_minutes = work;
+    s.break_minutes = rest;
+    s.long_every_minutes = long_every;
+    s.long_break_minutes = long_rest;
+    s.snooze_minutes = snooze;
+    s.start_with_mac = autostart;
     let path = core.settings_path.clone();
     core.settings.save(&path).map_err(|e| e.to_string())?;
     let config = core.settings.engine_config();
     core.engine.apply_config(config, now_ms());
     drop(core);
     apply_autostart(&app, autostart);
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct LanguageOption {
+    code: String,
+    name: String,
+}
+
+#[derive(Serialize)]
+struct AdvancedView {
+    idle_minutes: f64,
+    language: String,
+    languages: Vec<LanguageOption>,
+    built_in_pictures: usize,
+    your_pictures: usize,
+}
+
+#[tauri::command]
+fn get_advanced(shared: State<'_, Shared>) -> AdvancedView {
+    let core = shared.lock().expect("core lock");
+    AdvancedView {
+        idle_minutes: core.settings.idle_minutes,
+        language: core.lang().to_string(),
+        languages: i18n::LANGUAGES.iter().map(|code| LanguageOption { code: code.to_string(), name: i18n::t(code, "lang.name") }).collect(),
+        built_in_pictures: core.photos.built_in_count(),
+        your_pictures: core.photos.user_files().len(),
+    }
+}
+
+/// Saves the advanced settings. A new language is applied everywhere at once.
+#[tauri::command]
+fn save_advanced(app: AppHandle, shared: State<'_, Shared>, idle: f64, language: String) -> Result<(), String> {
+    let mut core = shared.lock().expect("core lock");
+    if !idle.is_finite() || !(1.0..=60.0).contains(&idle) {
+        return Err(i18n::t(core.lang(), "advanced.invalidIdle"));
+    }
+    let language = i18n::valid(&language).to_string();
+    let changed = language != core.lang();
+    core.settings.idle_minutes = idle;
+    core.settings.language = language.clone();
+    let path = core.settings_path.clone();
+    core.settings.save(&path).map_err(|e| e.to_string())?;
+    drop(core);
+
+    if changed {
+        apply_tray_language(&app, &language);
+        for (label, key) in [("settings", "settings.title"), ("history", "history.title")] {
+            if let Some(window) = app.get_webview_window(label) {
+                let _ = window.set_title(&i18n::t(&language, key));
+                let _ = window.eval("location.reload()");
+            }
+        }
+    }
     Ok(())
 }
 
@@ -407,12 +542,18 @@ fn build_core(app: &AppHandle) -> Result<Core, Box<dyn std::error::Error>> {
     fs::create_dir_all(&dir)?;
     let settings_path = dir.join("settings.json");
     let settings = Settings::load(&settings_path);
+    let start_sound = dir.join("break-start.wav");
+    let end_sound = dir.join("break-end.wav");
+    fs::write(&start_sound, START_SOUND)?;
+    fs::write(&end_sound, END_SOUND)?;
     Ok(Core {
         engine: Engine::new(settings.engine_config()),
         history: History::load(dir.join("history.csv")),
         photos: PhotoPool::new(dir.join("photos")),
         settings,
         settings_path,
+        start_sound,
+        end_sound,
         started: false,
         presenting_seen: 0,
         overlays_up: false,
@@ -420,13 +561,13 @@ fn build_core(app: &AppHandle) -> Result<Core, Box<dyn std::error::Error>> {
     })
 }
 
-fn build_tray(app: &AppHandle) -> tauri::Result<()> {
-    let status = MenuItem::with_id(app, "status", "Starting", false, None::<&str>)?;
-    let today = MenuItem::with_id(app, "today", "Breaks today: 0", false, None::<&str>)?;
-    let take_break = MenuItem::with_id(app, "break", "Take a break now", true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Settings...", true, None::<&str>)?;
-    let history = MenuItem::with_id(app, "history", "History...", true, None::<&str>)?;
-    let exit = MenuItem::with_id(app, "exit", "Exit...", true, None::<&str>)?;
+fn build_tray(app: &AppHandle, lang: &str) -> tauri::Result<()> {
+    let status = MenuItem::with_id(app, "status", "StandUp", false, None::<&str>)?;
+    let today = MenuItem::with_id(app, "today", i18n::f(lang, "tray.breaksToday", &["0"]), false, None::<&str>)?;
+    let take_break = MenuItem::with_id(app, "break", i18n::t(lang, "tray.takeBreak"), true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", i18n::t(lang, "tray.settings"), true, None::<&str>)?;
+    let history = MenuItem::with_id(app, "history", i18n::t(lang, "tray.history"), true, None::<&str>)?;
+    let exit = MenuItem::with_id(app, "exit", i18n::t(lang, "tray.exit"), true, None::<&str>)?;
     let separator_one = PredefinedMenuItem::separator(app)?;
     let separator_two = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&status, &today, &separator_one, &take_break, &settings, &history, &separator_two, &exit])?;
@@ -447,7 +588,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         })
         .build(app)?;
 
-    app.manage(TrayItems { status, today, take_break });
+    app.manage(TrayItems { status, today, take_break, settings, history, exit });
     Ok(())
 }
 
@@ -461,11 +602,15 @@ fn main() {
             snooze,
             lock_screen,
             next_photo,
+            ui_strings,
             close_self,
             submit_passcode,
             set_passcode,
             get_settings,
             save_settings,
+            open_advanced,
+            get_advanced,
+            save_advanced,
             add_picture,
             open_pictures_folder,
             history_days
@@ -477,8 +622,9 @@ fn main() {
             let handle = app.handle().clone();
             let core = build_core(&handle)?;
             let needs_passcode = !core.settings.has_passcode();
+            let lang = core.lang().to_string();
             app.manage::<Shared>(Arc::new(Mutex::new(core)));
-            build_tray(&handle)?;
+            build_tray(&handle, &lang)?;
             spawn_clock(handle.clone());
 
             if needs_passcode {

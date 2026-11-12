@@ -36,6 +36,9 @@ namespace StandUp
                     case "--break-seconds": test.BreakSeconds = int.Parse(args[++i]); break;
                     case "--snooze-seconds": test.SnoozeSeconds = int.Parse(args[++i]); break;
                     case "--exit-after": test.ExitAfterSeconds = int.Parse(args[++i]); break;
+                    case "--idle-seconds": test.IdleSeconds = int.Parse(args[++i]); break;
+                    case "--long-every-seconds": test.LongEverySeconds = int.Parse(args[++i]); break;
+                    case "--language": test.Language = args[++i]; break;
                 }
             }
             if (lockOverlay) return LockScreenTimer.RunOverlay();
@@ -46,9 +49,11 @@ namespace StandUp
                 if (!first) return 0;
 
                 AppSettings settings = AppSettings.Load();
+                if (test.Language != null) settings.Language = test.Language;
+                L10n.Language = settings.Language;
                 if (!TestMode && !settings.HasPasscode)
                 {
-                    const string intro = "Welcome to StandUp. Choose a passcode. You'll need it to close the app from the tray.";
+                    string intro = L10n.T("passcode.welcomeTitle") + "\n\n" + L10n.T("passcode.welcome");
                     using (var dialog = new SetPasscodeForm(settings, intro))
                     {
                         if (dialog.ShowDialog() != DialogResult.OK) return 0;

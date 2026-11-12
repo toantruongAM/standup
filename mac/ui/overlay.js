@@ -1,9 +1,9 @@
-const { invoke } = window.__TAURI__.core;
 const primary = !window.STANDUP || window.STANDUP.primary;
 const MOVE_THRESHOLD = 3; // pixels; a bumped desk should not restart the timer
 
 const clock = document.getElementById('clock');
 const statusLine = document.getElementById('status');
+const headline = document.getElementById('headline');
 const snooze = document.getElementById('snooze');
 
 if (primary) {
@@ -13,21 +13,22 @@ if (primary) {
   snooze.style.left = `${6 + Math.random() * 86}vw`;
 } else {
   document.body.classList.add('secondary');
-  document.getElementById('headline').textContent = 'Go walk. This screen can wait.';
 }
 
 async function refresh() {
   const state = await invoke('break_state');
   const seconds = Math.ceil(state.left_ms / 1000);
   clock.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  headline.textContent = primary ? t(state.long ? 'overlay.headlineLong' : 'overlay.headline') : t('overlay.secondary');
   statusLine.classList.toggle('warn', state.restarted);
-  statusLine.textContent = state.restarted
-    ? 'You touched something, so the timer restarted. Hands off!'
-    : 'Any key or mouse movement restarts the timer.';
+  statusLine.textContent = t(state.restarted ? 'overlay.restarted' : 'overlay.status');
   snooze.hidden = !(primary && state.can_snooze);
 }
-refresh();
-setInterval(refresh, 250);
+
+loadStrings().then(() => {
+  refresh();
+  setInterval(refresh, 250);
+});
 
 let anchor = null;
 window.addEventListener('mousemove', (event) => {

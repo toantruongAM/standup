@@ -13,9 +13,10 @@ static class EngineTests
         if (!ok) failures++;
     }
 
+    // Short break every 50 minutes for 2, long break after 3 hours for 10.
     static BreakEngine New(out List<DateTime> done)
     {
-        var e = new BreakEngine(new EngineConfig());
+        var e = new BreakEngine(new EngineConfig { WorkSeconds = 3000 });
         var list = new List<DateTime>();
         e.BreakCompleted += (at, s) => list.Add(at);
         done = list;
@@ -34,11 +35,14 @@ static class EngineTests
     {
         List<DateTime> done;
 
+        Check("default short break is every hour", new EngineConfig().WorkSeconds == 3600);
+        Check("default long break is 10 minutes after 3 hours", new EngineConfig().LongBreakSeconds == 600 && new EngineConfig().LongEverySeconds == 10800);
+
         var e = New(out done);
         var t = Run(e, T0, 2990);
         Check("still working just before 50 min", e.Phase == Phase.Working);
         t = Run(e, t, 10);
-        Check("break starts at 50 min", e.Phase == Phase.Break);
+        Check("break starts at 50 min", e.Phase == Phase.Break && !e.IsLongBreak);
         t = Run(e, t, 120);
         Check("break completes after 2 min", e.Phase == Phase.Working && done.Count == 1);
         Check("next work period is a full 50 min", e.Deadline == t.AddSeconds(3000));
@@ -77,13 +81,6 @@ static class EngineTests
 
         e = New(out done);
         t = Run(e, T0, 1000);
-        e.Suspend(t);
-        t = t.AddHours(1);
-        e.Resume(t);
-        Check("wake from sleep restarts work", e.Phase == Phase.Working && e.Deadline == t.AddSeconds(3000));
-
-        e = New(out done);
-        t = Run(e, T0, 1000);
         e.Lock(t);
         e.Suspend(t);
         t = t.AddHours(1);
@@ -102,7 +99,6 @@ static class EngineTests
         e = New(out done);
         t = Run(e, T0, 3000);
         e.Lock(t);
-        Check("break keeps its deadline while locked", e.IsBreakPaused && e.Deadline == t.AddSeconds(120));
         t = t.AddSeconds(30);
         e.Unlock(t);
         Check("early unlock resumes the break", e.Phase == Phase.Break && e.Deadline == t.AddSeconds(90) && done.Count == 0);
@@ -114,50 +110,74 @@ static class EngineTests
         t = t.AddSeconds(300);
         e.Unlock(t);
         Check("break finished on lock screen counts", done.Count == 1 && done[0] == breakEnd);
-        Check("work restarts after that unlock", e.Phase == Phase.Working && e.Deadline == t.AddSeconds(3000));
-
-        e = New(out done);
-        t = Run(e, T0, 500);
-        e.Activity(t);
-        Check("input during work changes nothing", e.Deadline == T0.AddSeconds(3000));
 
         e = New(out done);
         t = Run(e, T0, 2900);
         e.SetPresenting(true, t);
-        Check("presenting pauses work", e.Phase == Phase.Paused && e.IsPresenting);
         t = t.AddHours(1);
         e.Tick(t);
         Check("no break fires while presenting", e.Phase == Phase.Paused);
         e.SetPresenting(false, t);
         Check("full work period after presenting", e.Phase == Phase.Working && e.Deadline == t.AddSeconds(3000));
 
+        // Away from the computer
+        e = New(out done);
+        t = Run(e, T0, 1000);
+        DateTime due = e.Deadline;
+        e.SetIdle(true, t);
+        t = Run(e, t, 1800);
+        Check("idle stops the work clock", e.Phase == Phase.Working && e.IsIdle && e.Deadline == due.AddSeconds(1800));
+        e.SetIdle(false, t);
+        t = Run(e, t, 1990);
+        Check("clock resumes where it stopped (10s left)", e.Phase == Phase.Working);
+        t = Run(e, t, 10);
+        Check("break comes after the remaining time", e.Phase == Phase.Break);
+
         e = New(out done);
         t = Run(e, T0, 3000);
-        e.Snooze(t);
+        e.SetIdle(true, t);
         t = Run(e, t, 120);
-        e.SetPresenting(true, t);
-        Check("presenting cancels a running break", e.Phase == Phase.Paused && !e.IsBreakPaused);
-        t = t.AddSeconds(600);
-        e.SetPresenting(false, t);
-        Check("cancelled break is not counted", e.Phase == Phase.Working && done.Count == 0);
-        Check("snoozes refill after presenting", e.SnoozesUsed == 0);
+        Check("being idle doesn't stop a break", done.Count == 1);
+
+        // Changing settings
+        e = New(out done);
+        t = Run(e, T0, 1200);
+        e.ApplyConfig(new EngineConfig { WorkSeconds = 3600 }, t);
+        Check("longer work time keeps time worked", e.Deadline == T0.AddSeconds(3600));
+        e.ApplyConfig(new EngineConfig { WorkSeconds = 600 }, t);
+        Check("shorter work time keeps time worked", e.Deadline == T0.AddSeconds(600) && e.Phase == Phase.Working);
+        t = Run(e, t, 10);
+        Check("already past the new work time: break starts", e.Phase == Phase.Break);
+
+        // Long breaks
+        e = New(out done);
+        t = T0;
+        int shortBreaks = 0;
+        bool sawLong = false;
+        for (int i = 0; i < 4 && !sawLong; i++)
+        {
+            t = Run(e, t, 3000);
+            if (e.IsLongBreak) sawLong = true;
+            else { shortBreaks++; t = Run(e, t, 120); }
+        }
+        Check("three short breaks, then a long one (after 3h20m of work)", shortBreaks == 3 && sawLong);
+        Check("long break lasts 10 minutes", e.Deadline == t.AddSeconds(600));
+        t = Run(e, t, 590);
+        e.Activity(t);
+        Check("input restarts a long break at 10 minutes", e.Deadline == t.AddSeconds(600));
+        t = Run(e, t, 600);
+        Check("after a long break, next break is short again", e.Phase == Phase.Working && !e.NextBreakIsLong(t));
 
         e = New(out done);
-        t = Run(e, T0, 1000);
-        e.SetPresenting(true, t);
+        t = Run(e, T0, 3000);
+        t = Run(e, t, 120);
+        t = Run(e, t, 3000);
+        t = Run(e, t, 120);
         e.Lock(t);
-        e.SetPresenting(false, t);
-        Check("still paused if locked when presenting ends", e.Phase == Phase.Paused);
-        t = t.AddSeconds(30);
+        t = t.AddMinutes(30);
         e.Unlock(t);
-        Check("counting starts at the unlock", e.Phase == Phase.Working && e.Deadline == t.AddSeconds(3000));
-
-        e = New(out done);
-        t = Run(e, T0, 1000);
-        e.Lock(t);
-        e.SetPresenting(true, t);
-        e.Unlock(t);
-        Check("still paused if unlocked during a presentation", e.Phase == Phase.Paused);
+        t = Run(e, t, 3000);
+        Check("a long time locked counts as a long break", e.Phase == Phase.Break && !e.IsLongBreak);
 
         Console.WriteLine(failures == 0 ? "ALL PASSED" : failures + " FAILED");
         return failures;

@@ -23,29 +23,31 @@ namespace StandUp
         {
             public string Title;
             public string Unit;
+            public string Column;
             public Func<DayStats, double> Value;
         }
 
-        static readonly Measure[] Measures =
-        {
-            new Measure { Title = "Breaks per day", Unit = "breaks", Value = d => d.Breaks },
-            new Measure { Title = "Snoozes per day", Unit = "snoozes", Value = d => d.Snoozes },
-            new Measure { Title = "Break minutes per day", Unit = "minutes", Value = d => d.BreakSeconds / 60.0 }
-        };
-
+        readonly Measure[] Measures;
         readonly History _history;
         readonly Font _titleFont, _labelFont;
-        Measure[] _shown = { Measures[0], Measures[2] };
+        Measure[] _shown;
         int _days = 14;
         int _hover = -1;
 
         public HistoryChart(History history)
         {
             _history = history;
+            Measures = new[]
+            {
+                new Measure { Title = L10n.T("history.breaksPerDay"), Unit = L10n.T("history.unitBreaks"), Column = L10n.T("history.colBreaks"), Value = d => d.Breaks },
+                new Measure { Title = L10n.T("history.snoozesPerDay"), Unit = L10n.T("history.unitSnoozes"), Column = L10n.T("history.colSnoozes"), Value = d => d.Snoozes },
+                new Measure { Title = L10n.T("history.minutesPerDay"), Unit = L10n.T("history.unitMinutes"), Column = L10n.T("history.colMinutes"), Value = d => d.BreakSeconds / 60.0 }
+            };
+            _shown = new[] { Measures[0], Measures[2] };
             DoubleBuffered = true;
             ResizeRedraw = true;
             BackColor = Surface;
-            AccessibleName = "Chart of breaks, snoozes and break minutes per day. The same numbers are in the table below.";
+            AccessibleName = L10n.T("history.chartLabel");
             _titleFont = new Font("Segoe UI Semibold", 10f);
             _labelFont = new Font("Segoe UI", 8.5f);
         }
@@ -100,7 +102,7 @@ namespace StandUp
             {
                 g.DrawString(measure.Title, _titleFont, primary, 6 * s, top + 4 * s);
                 SizeF used = g.MeasureString(measure.Title, _titleFont);
-                g.DrawString(Format(total) + " " + measure.Unit + " in the last " + _days + " days", _labelFont, secondary, 6 * s + used.Width + 4 * s, top + 6 * s);
+                g.DrawString(L10n.T("history.total", Format(total), measure.Unit, _days), _labelFont, secondary, 6 * s + used.Width + 4 * s, top + 6 * s);
 
                 float plotTop = top + 34 * s, plotBottom = top + height - 6 * s;
                 double max = NiceMax(values.Max());
@@ -145,7 +147,7 @@ namespace StandUp
             {
                 for (int i = _days - 1; i >= 0; i -= step)
                 {
-                    string text = Day(i).Date.ToString("d MMM", CultureInfo.CurrentCulture);
+                    string text = Day(i).Date.ToString("d MMM", L10n.Culture);
                     SizeF size = g.MeasureString(text, _labelFont);
                     float x = PlotLeft + (i + 0.5f) * Band - size.Width / 2;
                     x = Math.Min(x, ClientSize.Width - size.Width - 2);
@@ -158,10 +160,11 @@ namespace StandUp
         {
             float s = Scale1;
             DayStats day = Day(_hover);
-            string date = day.Date.ToString("ddd, d MMM yyyy", CultureInfo.CurrentCulture);
-            string[] rows = Measures.Select(m => m.Unit.Substring(0, 1).ToUpperInvariant() + m.Unit.Substring(1) + ": " + Format(m.Value(day))).ToArray();
+            string date = day.Date.ToString("ddd, d MMM yyyy", L10n.Culture);
+            string[] rows = Measures.Select(m => m.Column + ": " + Format(m.Value(day))).ToArray();
 
-            float width = 150 * s, height = 88 * s;
+            float textWidth = Math.Max(g.MeasureString(date, _titleFont).Width, rows.Max(r => g.MeasureString(r, _labelFont).Width));
+            float width = Math.Max(150 * s, textWidth + 18 * s), height = 88 * s;
             float x = PlotLeft + (_hover + 1) * Band + 6 * s;
             if (x + width > ClientSize.Width) x = PlotLeft + _hover * Band - width - 6 * s;
             float y = 34 * s;
@@ -201,7 +204,7 @@ namespace StandUp
 
         static string Format(double value)
         {
-            return value.ToString("0.#", CultureInfo.CurrentCulture);
+            return value.ToString("0.#", L10n.Culture);
         }
 
         protected override void OnMouseMove(MouseEventArgs e)

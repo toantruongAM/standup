@@ -110,11 +110,35 @@ static class DialogProbe
         settingsForm.Dispose();
 
         File.WriteAllText(Path.Combine(data, "lockstate.txt"), "");
+        FieldInfo current = T("LockScreenTimer").GetField("_current", Any);
+        current.SetValue(null, (bool?)false);
+        var outdatedForm = (Form)New("SettingsForm", loaded);
+        Shoot(outdatedForm, "dialog-settings-outdated.png");
+        Check("an older lock-screen timer offers an update", AllControls(outdatedForm).Any(c => c.Visible && c.Text == "Update lock-screen timer"));
+        outdatedForm.Dispose();
+        current.SetValue(null, (bool?)true);
         var installedForm = (Form)New("SettingsForm", loaded);
         Shoot(installedForm, "dialog-settings-installed.png");
-        Check("no lock-screen row once it is on", !AllControls(installedForm).Any(c => c.Visible && c.Text.Contains("ock-screen timer")));
-        Check("no unlock checkbox in Settings", !AllControls(installedForm).Any(c => c.Text.Contains("unlock before")));
+        Check("no lock-screen row once it is on and current", !AllControls(installedForm).Any(c => c.Visible && c.Text.Contains("ock-screen timer")));
+        Check("pictures moved out of the main Settings", !AllControls(installedForm).Any(c => c.Text.Contains("Add pictures")));
         installedForm.Dispose();
+
+        foreach (string lang in new[] { "en", "es", "vi" })
+        {
+            T("L10n").GetProperty("Language", Any).SetValue(null, lang);
+            var s = (Form)New("SettingsForm", loaded);
+            Shoot(s, "i18n-settings-" + lang + ".png");
+            s.Dispose();
+            var a = (Form)New("AdvancedForm", loaded);
+            Shoot(a, "i18n-advanced-" + lang + ".png");
+            if (lang == "en") Check("pictures and language are in Advanced settings", AllControls(a).Any(c => c.Text == "Add pictures...") && AllControls(a).OfType<ComboBox>().Any());
+            a.Dispose();
+            var h = (Form)New("HistoryForm", New("History"));
+            Shoot(h, "i18n-history-" + lang + ".png");
+            h.Dispose();
+        }
+        T("L10n").GetProperty("Language", Any).SetValue(null, "en");
+        current.SetValue(null, null);
 
         // A spread of days for the chart, seeded after the count check above.
         var seeded = new System.Collections.Generic.List<string>();

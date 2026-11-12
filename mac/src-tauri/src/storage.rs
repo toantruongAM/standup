@@ -19,7 +19,11 @@ const ITERATIONS: u32 = 100_000;
 pub struct Settings {
     pub work_minutes: f64,
     pub break_minutes: f64,
+    pub long_every_minutes: f64,
+    pub long_break_minutes: f64,
     pub snooze_minutes: f64,
+    pub idle_minutes: f64,
+    pub language: String,
     pub start_with_mac: bool,
     pub passcode_salt: String,
     pub passcode_hash: String,
@@ -28,9 +32,13 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Settings {
-            work_minutes: 50.0,
+            work_minutes: 60.0,
             break_minutes: 2.0,
+            long_every_minutes: 180.0,
+            long_break_minutes: 10.0,
             snooze_minutes: 2.0,
+            idle_minutes: 5.0,
+            language: "en".to_string(),
             start_with_mac: true,
             passcode_salt: String::new(),
             passcode_hash: String::new(),
@@ -51,6 +59,8 @@ impl Settings {
         Config {
             work_seconds: (self.work_minutes * 60.0) as i64,
             break_seconds: (self.break_minutes * 60.0) as i64,
+            long_every_seconds: (self.long_every_minutes * 60.0) as i64,
+            long_break_seconds: (self.long_break_minutes * 60.0) as i64,
             snooze_seconds: (self.snooze_minutes * 60.0) as i64,
             ..Config::default()
         }
@@ -145,20 +155,35 @@ impl History {
     }
 }
 
-const BUILT_IN: [&[u8]; 12] = [
-    include_bytes!("../../../art/photos/dog01.png"),
-    include_bytes!("../../../art/photos/dog02.png"),
-    include_bytes!("../../../art/photos/dog03.png"),
-    include_bytes!("../../../art/photos/dog04.png"),
-    include_bytes!("../../../art/photos/dog05.png"),
-    include_bytes!("../../../art/photos/dog06.png"),
-    include_bytes!("../../../art/photos/baby01.png"),
-    include_bytes!("../../../art/photos/baby02.png"),
-    include_bytes!("../../../art/photos/baby03.png"),
-    include_bytes!("../../../art/photos/baby04.png"),
-    include_bytes!("../../../art/photos/babydog01.png"),
-    include_bytes!("../../../art/photos/babydog02.png"),
-];
+/// The built-in pictures have their captions drawn in each language.
+macro_rules! pictures {
+    ($lang:literal) => {
+        [
+            include_bytes!(concat!("../../../art/photos/", $lang, "/dog01.png")) as &[u8],
+            include_bytes!(concat!("../../../art/photos/", $lang, "/dog02.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/dog03.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/dog04.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/dog05.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/dog06.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/baby01.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/baby02.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/baby03.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/baby04.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/babydog01.png")),
+            include_bytes!(concat!("../../../art/photos/", $lang, "/babydog02.png")),
+        ]
+    };
+}
+
+const BUILT_IN: [[&[u8]; 12]; 3] = [pictures!("en"), pictures!("es"), pictures!("vi")];
+
+fn built_in_for(language: &str) -> &'static [&'static [u8]; 12] {
+    match language {
+        "es" => &BUILT_IN[1],
+        "vi" => &BUILT_IN[2],
+        _ => &BUILT_IN[0],
+    }
+}
 
 const EXTENSIONS: [(&str, &str); 7] = [
     ("png", "image/png"),
@@ -192,7 +217,7 @@ impl PhotoPool {
     }
 
     pub fn built_in_count(&self) -> usize {
-        BUILT_IN.len()
+        BUILT_IN[0].len()
     }
 
     pub fn user_files(&self) -> Vec<PathBuf> {
@@ -204,19 +229,20 @@ impl PhotoPool {
     }
 
     /// Returns a picture as a data URL, never the same one twice in a row.
-    pub fn next(&mut self) -> Option<String> {
+    pub fn next(&mut self, language: &str) -> Option<String> {
+        let built_in = built_in_for(language);
         let files = self.user_files();
-        let total = BUILT_IN.len() + files.len();
+        let total = built_in.len() + files.len();
         let mut pick = (random_u32() as usize) % total;
         if total > 1 && Some(pick) == self.last {
             pick = (pick + 1) % total;
         }
         self.last = Some(pick);
 
-        if pick < BUILT_IN.len() {
-            return Some(format!("data:image/png;base64,{}", STANDARD.encode(BUILT_IN[pick])));
+        if pick < built_in.len() {
+            return Some(format!("data:image/png;base64,{}", STANDARD.encode(built_in[pick])));
         }
-        let path = &files[pick - BUILT_IN.len()];
+        let path = &files[pick - built_in.len()];
         let bytes = fs::read(path).ok()?;
         Some(format!("data:{};base64,{}", mime_for(path)?, STANDARD.encode(bytes)))
     }
@@ -284,7 +310,7 @@ mod tests {
         let mut pool = PhotoPool::new(dir.clone());
         let mut previous = String::new();
         for _ in 0..50 {
-            let next = pool.next().unwrap();
+            let next = pool.next("vi").unwrap();
             assert_ne!(next, previous);
             previous = next;
         }

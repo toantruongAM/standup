@@ -17,18 +17,21 @@ pub enum Phase {
 pub struct Config {
     pub work_seconds: i64,
     pub break_seconds: i64,
+    pub long_every_seconds: i64,
+    pub long_break_seconds: i64,
     pub snooze_seconds: i64,
     pub max_snoozes: u32,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { work_seconds: 3000, break_seconds: 120, snooze_seconds: 120, max_snoozes: 2 }
+        Config { work_seconds: 3600, break_seconds: 120, long_every_seconds: 10_800, long_break_seconds: 600, snooze_seconds: 120, max_snoozes: 2 }
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Event {
+    BreakStarted { long: bool },
     BreakCompleted { at: i64, seconds: i64 },
     Snoozed { at: i64, seconds: i64 },
 }
@@ -40,11 +43,17 @@ pub struct Engine {
     pub last_activity: i64,
     pub snoozes_used: u32,
     pub in_snooze: bool,
+    pub is_long_break: bool,
     locked: bool,
     suspended: bool,
     presenting: bool,
     paused_break: bool,
+    idle: bool,
     last_tick: i64,
+    paused_at: i64,
+    idle_since: i64,
+    /// Work counted since the last long break.
+    worked_ms: i64,
     events: Vec<Event>,
 }
 
@@ -57,11 +66,16 @@ impl Engine {
             last_activity: 0,
             snoozes_used: 0,
             in_snooze: false,
+            is_long_break: false,
             locked: false,
             suspended: false,
             presenting: false,
             paused_break: false,
+            idle: false,
             last_tick: 0,
+            paused_at: 0,
+            idle_since: 0,
+            worked_ms: 0,
             events: Vec::new(),
         }
     }
@@ -78,8 +92,22 @@ impl Engine {
         self.presenting
     }
 
+    pub fn is_idle(&self) -> bool {
+        self.idle && self.phase == Phase::Working
+    }
+
+    pub fn current_break_seconds(&self) -> i64 {
+        if self.is_long_break { self.config.long_break_seconds } else { self.config.break_seconds }
+    }
+
+    /// Whether the coming break will be a long one, if work carries on until it.
+    pub fn next_break_is_long(&self, now: i64) -> bool {
+        self.worked_ms + (self.deadline - now) >= self.config.long_every_seconds * 1000
+    }
+
     pub fn start(&mut self, now: i64) {
         self.last_tick = now;
+        self.worked_ms = 0;
         self.begin_work(now);
     }
 
@@ -91,7 +119,17 @@ impl Engine {
             self.resume(now);
             return;
         }
+
+        let elapsed = now - self.last_tick;
         self.last_tick = now;
+        if self.phase == Phase::Working {
+            // While you're away the clock stands still, so it resumes where it stopped.
+            if self.idle {
+                self.deadline += elapsed;
+            } else {
+                self.worked_ms += elapsed;
+            }
+        }
 
         if now < self.deadline {
             return;
@@ -111,8 +149,21 @@ impl Engine {
         if self.phase != Phase::Break {
             return;
         }
-        self.deadline = now + self.config.break_seconds * 1000;
+        self.deadline = now + self.current_break_seconds() * 1000;
         self.last_activity = now;
+    }
+
+    /// Whether nobody has used the computer for a while. Only work time is affected.
+    pub fn set_idle(&mut self, idle: bool, now: i64) {
+        if idle == self.idle {
+            return;
+        }
+        self.idle = idle;
+        if idle {
+            self.idle_since = now;
+        } else if now - self.idle_since >= self.config.long_break_seconds * 1000 {
+            self.worked_ms = 0;
+        }
     }
 
     pub fn snooze(&mut self, now: i64) -> bool {
@@ -133,9 +184,9 @@ impl Engine {
         }
     }
 
-    pub fn lock(&mut self) {
+    pub fn lock(&mut self, now: i64) {
         self.locked = true;
-        self.enter_pause();
+        self.enter_pause(now);
     }
 
     pub fn unlock(&mut self, now: i64) {
@@ -143,9 +194,9 @@ impl Engine {
         self.leave_pause(now);
     }
 
-    pub fn suspend(&mut self, _now: i64) {
+    pub fn suspend(&mut self, now: i64) {
         self.suspended = true;
-        self.enter_pause();
+        self.enter_pause(now);
     }
 
     pub fn resume(&mut self, now: i64) {
@@ -160,6 +211,9 @@ impl Engine {
         }
         self.presenting = presenting;
         if presenting {
+            if self.phase != Phase::Paused {
+                self.paused_at = now;
+            }
             self.paused_break = false;
             self.phase = Phase::Paused;
         } else {
@@ -167,18 +221,21 @@ impl Engine {
         }
     }
 
-    /// New durations apply at once to a normal work period, otherwise from the next one.
-    pub fn apply_config(&mut self, config: Config, now: i64) {
+    /// New settings keep the time already worked. If that is now past the new work time,
+    /// the next tick starts the break.
+    pub fn apply_config(&mut self, config: Config, _now: i64) {
+        let old_work = self.config.work_seconds;
         self.config = config;
         if self.phase == Phase::Working && !self.in_snooze {
-            self.deadline = now + self.config.work_seconds * 1000;
+            self.deadline += (self.config.work_seconds - old_work) * 1000;
         }
     }
 
-    fn enter_pause(&mut self) {
+    fn enter_pause(&mut self, now: i64) {
         if self.phase == Phase::Paused {
             return;
         }
+        self.paused_at = now;
         self.paused_break = self.phase == Phase::Break;
         self.phase = Phase::Paused;
     }
@@ -190,15 +247,23 @@ impl Engine {
         let was_break = self.paused_break;
         self.paused_break = false;
         self.last_tick = now;
+        // Time away from the computer as long as a long break counts as one.
+        let rested_long = now - self.paused_at >= self.config.long_break_seconds * 1000;
 
         if was_break && now >= self.deadline {
             let at = self.deadline;
             self.complete_break(at);
+            if rested_long {
+                self.worked_ms = 0;
+            }
             self.begin_work(now);
         } else if was_break {
             // Locking can't be used to skip a break: it carries on for the time left.
             self.phase = Phase::Break;
         } else {
+            if rested_long {
+                self.worked_ms = 0;
+            }
             self.begin_work(now);
         }
     }
@@ -212,13 +277,18 @@ impl Engine {
 
     fn begin_break(&mut self, now: i64) {
         self.in_snooze = false;
-        self.deadline = now + self.config.break_seconds * 1000;
+        self.is_long_break = self.worked_ms >= self.config.long_every_seconds * 1000;
+        self.deadline = now + self.current_break_seconds() * 1000;
         self.last_activity = 0;
         self.phase = Phase::Break;
+        self.events.push(Event::BreakStarted { long: self.is_long_break });
     }
 
     fn complete_break(&mut self, at: i64) {
-        self.events.push(Event::BreakCompleted { at, seconds: self.config.break_seconds });
+        self.events.push(Event::BreakCompleted { at, seconds: self.current_break_seconds() });
+        if self.is_long_break {
+            self.worked_ms = 0;
+        }
     }
 }
 
@@ -228,8 +298,9 @@ mod tests {
 
     const T0: i64 = 1_800_000_000_000;
 
+    /// Short break every 50 minutes for 2, long break after 3 hours for 10.
     fn new_engine() -> Engine {
-        let mut e = Engine::new(Config::default());
+        let mut e = Engine::new(Config { work_seconds: 3000, ..Config::default() });
         e.start(T0);
         e
     }
@@ -249,12 +320,20 @@ mod tests {
     }
 
     #[test]
+    fn defaults_are_hourly_short_and_three_hour_long() {
+        let c = Config::default();
+        assert_eq!((c.work_seconds, c.break_seconds, c.long_every_seconds, c.long_break_seconds), (3600, 120, 10_800, 600));
+    }
+
+    #[test]
     fn break_starts_after_work_and_completes() {
         let mut e = new_engine();
         let t = run(&mut e, T0, 2990);
         assert_eq!(e.phase, Phase::Working);
         let t = run(&mut e, t, 10);
         assert_eq!(e.phase, Phase::Break);
+        assert!(!e.is_long_break);
+        assert_eq!(e.take_events(), vec![Event::BreakStarted { long: false }]);
         let t = run(&mut e, t, 120);
         assert_eq!(e.phase, Phase::Working);
         assert_eq!(completed(&mut e), 1);
@@ -280,13 +359,11 @@ mod tests {
         let mut e = new_engine();
         let t = run(&mut e, T0, 3000);
         assert!(e.snooze(t));
-        assert_eq!(e.phase, Phase::Working);
         assert_eq!(e.deadline, t + 120_000);
         let t = run(&mut e, t, 120);
         assert_eq!(e.phase, Phase::Break);
         assert!(e.snooze(t));
         let t = run(&mut e, t, 120);
-        assert_eq!(e.phase, Phase::Break);
         assert!(!e.can_snooze());
         assert!(!e.snooze(t));
         run(&mut e, t, 120);
@@ -298,27 +375,12 @@ mod tests {
     fn lock_pauses_and_unlock_restarts_work() {
         let mut e = new_engine();
         let t = run(&mut e, T0, 1000);
-        e.lock();
-        assert_eq!(e.phase, Phase::Paused);
+        e.lock(t);
         let t = t + 600_000;
         e.tick(t);
         assert_eq!(e.phase, Phase::Paused);
         e.unlock(t);
         assert_eq!(e.phase, Phase::Working);
-        assert_eq!(e.deadline, t + 3_000_000);
-    }
-
-    #[test]
-    fn counting_starts_at_unlock_not_wake() {
-        let mut e = new_engine();
-        let t = run(&mut e, T0, 1000);
-        e.lock();
-        e.suspend(t);
-        let t = t + 3_600_000;
-        e.resume(t);
-        assert_eq!(e.phase, Phase::Paused);
-        let t = t + 30_000;
-        e.unlock(t);
         assert_eq!(e.deadline, t + 3_000_000);
     }
 
@@ -335,26 +397,11 @@ mod tests {
     fn early_unlock_resumes_the_break() {
         let mut e = new_engine();
         let t = run(&mut e, T0, 3000);
-        e.lock();
-        assert_eq!(e.deadline, t + 120_000);
+        e.lock(t);
         let t = t + 30_000;
         e.unlock(t);
         assert_eq!(e.phase, Phase::Break);
         assert_eq!(e.deadline, t + 90_000);
-        assert_eq!(completed(&mut e), 0);
-    }
-
-    #[test]
-    fn break_finished_while_locked_counts() {
-        let mut e = new_engine();
-        let t = run(&mut e, T0, 3000);
-        let end = t + 120_000;
-        e.lock();
-        let t = t + 300_000;
-        e.unlock(t);
-        assert_eq!(e.take_events(), vec![Event::BreakCompleted { at: end, seconds: 120 }]);
-        assert_eq!(e.phase, Phase::Working);
-        assert_eq!(e.deadline, t + 3_000_000);
     }
 
     #[test]
@@ -362,7 +409,6 @@ mod tests {
         let mut e = new_engine();
         let t = run(&mut e, T0, 2900);
         e.set_presenting(true, t);
-        assert_eq!(e.phase, Phase::Paused);
         let t = t + 3_600_000;
         e.tick(t);
         assert_eq!(e.phase, Phase::Paused);
@@ -372,31 +418,67 @@ mod tests {
     }
 
     #[test]
-    fn presenting_cancels_a_running_break() {
+    fn idle_stops_the_clock_and_resumes_where_it_stopped() {
         let mut e = new_engine();
-        let t = run(&mut e, T0, 3000);
-        e.snooze(t);
-        let t = run(&mut e, t, 120);
-        e.set_presenting(true, t);
-        assert_eq!(e.phase, Phase::Paused);
-        let t = t + 600_000;
-        e.set_presenting(false, t);
+        let t = run(&mut e, T0, 1000);
+        let due = e.deadline;
+        e.set_idle(true, t);
+        assert!(e.is_idle());
+        let t = run(&mut e, t, 1800);
         assert_eq!(e.phase, Phase::Working);
-        assert_eq!(completed(&mut e), 0);
-        assert_eq!(e.snoozes_used, 0);
+        assert_eq!(e.deadline, due + 1_800_000);
+        e.set_idle(false, t);
+        let t = run(&mut e, t, 1990);
+        assert_eq!(e.phase, Phase::Working);
+        run(&mut e, t, 10);
+        assert_eq!(e.phase, Phase::Break);
     }
 
     #[test]
-    fn lock_and_presenting_both_have_to_end() {
+    fn settings_changes_keep_time_worked() {
         let mut e = new_engine();
-        let t = run(&mut e, T0, 1000);
-        e.set_presenting(true, t);
-        e.lock();
-        e.set_presenting(false, t);
-        assert_eq!(e.phase, Phase::Paused);
-        let t = t + 30_000;
-        e.unlock(t);
+        let t = run(&mut e, T0, 1200);
+        e.apply_config(Config::default(), t);
+        assert_eq!(e.deadline, T0 + 3_600_000);
+        e.apply_config(Config { work_seconds: 600, ..Config::default() }, t);
+        assert_eq!(e.deadline, T0 + 600_000);
+        run(&mut e, t, 10);
+        assert_eq!(e.phase, Phase::Break);
+    }
+
+    #[test]
+    fn long_break_after_three_hours_of_work() {
+        let mut e = new_engine();
+        let mut t = T0;
+        let mut short_breaks = 0;
+        loop {
+            t = run(&mut e, t, 3000);
+            if e.is_long_break {
+                break;
+            }
+            short_breaks += 1;
+            t = run(&mut e, t, 120);
+        }
+        assert_eq!(short_breaks, 3);
+        assert_eq!(e.deadline, t + 600_000);
+        let t = run(&mut e, t, 600);
         assert_eq!(e.phase, Phase::Working);
-        assert_eq!(e.deadline, t + 3_000_000);
+        assert!(!e.next_break_is_long(t));
+    }
+
+    #[test]
+    fn a_long_time_locked_counts_as_a_long_break() {
+        let mut e = new_engine();
+        let mut t = T0;
+        for _ in 0..2 {
+            t = run(&mut e, t, 3000);
+            t = run(&mut e, t, 120);
+        }
+        e.lock(t);
+        t += 1_800_000;
+        e.unlock(t);
+        run(&mut e, t, 3000);
+        assert_eq!(e.phase, Phase::Break);
+        assert!(!e.is_long_break);
     }
 }

@@ -1,9 +1,11 @@
-StandUp
-=======
-Sitting all day is bad for you. Every 50 minutes, StandUp freezes your screen
-for a 2-minute walking break and shows you a funny picture.
+StandUp 1.1
+===========
+Sitting all day is bad for you. Every hour, StandUp freezes your screen for a
+2-minute walking break and shows you a funny picture. Every 3 hours of work,
+the break is a longer one (10 minutes). A soft chime plays when a break starts
+and when it ends.
 
-Needs Windows 10 or 11.
+Needs Windows 10 or 11. Available in English, Español and Tiếng Việt.
 
 
 INSTALL
@@ -22,16 +24,22 @@ DURING A BREAK
 - Need a moment? Look for the small dim "snooze" along the bottom of your main
   screen. It gives you 2 more minutes, and you get 2 snoozes per break.
 
-The work timer starts again whenever you turn on, wake or unlock the PC.
-Breaks wait during a PowerPoint slide show. They do NOT wait during Zoom or
-Teams screen sharing.
+
+WHEN THE CLOCK STOPS
+- Away from the computer for 5 minutes: the work clock pauses, and carries on
+  from where it stopped when you're back.
+- Turning on, waking or unlocking the PC starts a fresh work period.
+- PowerPoint slide shows: no breaks until the show ends. Zoom and Teams screen
+  sharing are NOT detected.
 
 
-SETTINGS (right-click the tray icon)
-Settings     Work, break and snooze times, your passcode, your own pictures,
-             and an optional timer on the lock screen (needs admin approval)
-History      Charts of your breaks over time
-Exit         Needs your passcode
+SETTINGS (right-click the tray icon; needs your passcode)
+Settings            Short and long break times, snooze, your passcode, and an
+                    optional timer on the lock screen (needs admin approval)
+Advanced settings   Time away before the clock pauses, language, and your own
+                    pictures
+History             Charts of your breaks over time
+Exit                Needs your passcode
 
 
 UNINSTALL

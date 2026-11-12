@@ -10,13 +10,14 @@
 <p id="intro"></p>
 <form id="form">
   <input id="first" type="password" autofocus>
-  <input id="second" type="password" placeholder="Type it again" hidden>
+  <input id="second" type="password" data-i18n-placeholder="passcode.again" hidden>
   <p id="error" class="error" role="alert"></p>
   <div class="actions">
-    <button type="button" id="cancel">Cancel</button>
-    <button type="submit" class="primary">OK</button>
+    <button type="button" id="cancel" data-i18n="common.cancel"></button>
+    <button type="submit" class="primary" data-i18n="common.ok"></button>
   </div>
 </form>
+<script src="common.js"></script>
 <script src="passcode.js"></script>
 </body>
 </html>

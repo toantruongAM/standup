@@ -48,7 +48,39 @@ namespace StandUp
 
         public static void Publish(DateTime deadlineUtc, int totalSeconds)
         {
-            WriteState(deadlineUtc.Ticks.ToString(CultureInfo.InvariantCulture) + " " + totalSeconds.ToString(CultureInfo.InvariantCulture));
+            // Lock-screen helpers older than 1.1 only understand two numbers, so they don't get the language.
+            string language = IsCurrent ? " " + L10n.Language : "";
+            WriteState(deadlineUtc.Ticks.ToString(CultureInfo.InvariantCulture) + " " + totalSeconds.ToString(CultureInfo.InvariantCulture) + language);
+        }
+
+        static bool? _current;
+
+        /// <summary>Whether the installed lock-screen copy is this exact version of StandUp.</summary>
+        public static bool IsCurrent
+        {
+            get
+            {
+                if (_current == null) _current = File.Exists(InstalledExe) && SameFile(InstalledExe, Application.ExecutablePath);
+                return _current.Value;
+            }
+        }
+
+        public static void Forget() { _current = null; }
+
+        static bool SameFile(string a, string b)
+        {
+            try
+            {
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                {
+                    byte[] first, second;
+                    using (FileStream s = File.OpenRead(a)) first = sha.ComputeHash(s);
+                    using (FileStream s = File.OpenRead(b)) second = sha.ComputeHash(s);
+                    return first.SequenceEqual(second);
+                }
+            }
+            catch (IOException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
         }
 
         public static void Clear() { WriteState(""); }
@@ -71,8 +103,15 @@ namespace StandUp
 
         internal static bool TryRead(out DateTime deadlineUtc, out int totalSeconds)
         {
+            string language;
+            return TryRead(out deadlineUtc, out totalSeconds, out language);
+        }
+
+        internal static bool TryRead(out DateTime deadlineUtc, out int totalSeconds, out string language)
+        {
             deadlineUtc = DateTime.MinValue;
             totalSeconds = 0;
+            language = "en";
             try
             {
                 var buffer = new byte[64];
@@ -82,7 +121,8 @@ namespace StandUp
 
                 string[] parts = Encoding.ASCII.GetString(buffer, 0, count).Split(' ');
                 long ticks;
-                if (parts.Length != 2) return false;
+                if (parts.Length != 2 && parts.Length != 3) return false;
+                if (parts.Length == 3 && L10n.Languages.Contains(parts[2])) language = parts[2];
                 if (!long.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out ticks)) return false;
                 if (!int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out totalSeconds)) return false;
                 if (ticks > DateTime.MaxValue.Ticks || totalSeconds < 1 || totalSeconds > 86400) return false;
@@ -101,6 +141,7 @@ namespace StandUp
             {
                 Directory.CreateDirectory(InstallDir);
                 File.Copy(Application.ExecutablePath, InstalledExe, true);
+                Forget();
 
                 // Only admins and SYSTEM can change the folder. Users may only write this one file's contents.
                 var folder = new DirectorySecurity();
@@ -301,7 +342,7 @@ namespace StandUp
 
         readonly System.Windows.Forms.Timer _timer;
         readonly Font _labelFont, _timerFont;
-        string _label = "Break time left";
+        string _label = "";
         string _clock = "";
         double _progress;
         int _emptyReads, _wrongDesktopTicks;
@@ -350,16 +391,20 @@ namespace StandUp
 
             DateTime deadline;
             int total;
-            if (!LockScreenTimer.TryRead(out deadline, out total))
+            string language;
+            if (!LockScreenTimer.TryRead(out deadline, out total, out language))
             {
                 _emptyReads++;
                 return;
             }
             _emptyReads = 0;
+            L10n.Language = language;
 
             int left = Math.Max(0, (int)Math.Ceiling((deadline - DateTime.UtcNow).TotalSeconds));
-            string clock = left == 0 ? "Done" : (left / 60) + ":" + (left % 60).ToString("00");
-            _label = left == 0 ? "Nice walk. Welcome back." : "Keep walking. Break time left";
+            string clock = left == 0 ? L10n.T("lock.doneClock") : (left / 60) + ":" + (left % 60).ToString("00");
+            string label = left == 0 ? L10n.T("lock.done") : L10n.T("lock.left");
+            if (label != _label) Invalidate();
+            _label = label;
             _progress = 1.0 - Math.Min(1.0, left / (double)total);
             if (clock != _clock)
             {

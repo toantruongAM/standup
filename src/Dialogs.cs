@@ -2,7 +2,6 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
-using System.Globalization;
 using System.Linq;
 using System.Windows.Forms;
 
@@ -26,7 +25,7 @@ namespace StandUp
 
         public static TableLayoutPanel Grid(int columns)
         {
-            var grid = new TableLayoutPanel
+            return new TableLayoutPanel
             {
                 ColumnCount = columns,
                 AutoSize = true,
@@ -34,7 +33,6 @@ namespace StandUp
                 Padding = new Padding(14),
                 Dock = DockStyle.Fill
             };
-            return grid;
         }
 
         public static Label Label(string text)
@@ -45,6 +43,25 @@ namespace StandUp
         public static TextBox Secret()
         {
             return new TextBox { UseSystemPasswordChar = true, Width = 190, Margin = new Padding(3, 4, 3, 4) };
+        }
+
+        public static void Span(TableLayoutPanel grid, Control control)
+        {
+            grid.Controls.Add(control);
+            grid.SetColumnSpan(control, grid.ColumnCount);
+        }
+
+        public static NumericUpDown Minutes(decimal value, decimal min, decimal max, int decimals)
+        {
+            return new NumericUpDown
+            {
+                Minimum = min,
+                Maximum = max,
+                DecimalPlaces = decimals,
+                Increment = decimals == 0 ? 1 : 0.5m,
+                Value = Math.Min(max, Math.Max(min, value)),
+                Width = 80
+            };
         }
 
         public static FlowLayoutPanel Buttons(Form form, string okText, bool canCancel)
@@ -60,7 +77,7 @@ namespace StandUp
             form.AcceptButton = ok;
             if (canCancel)
             {
-                var cancel = new Button { Text = "Cancel", AutoSize = true, DialogResult = DialogResult.Cancel };
+                var cancel = new Button { Text = L10n.T("common.cancel"), AutoSize = true, DialogResult = DialogResult.Cancel };
                 form.CancelButton = cancel;
                 panel.Controls.Add(cancel);
             }
@@ -69,7 +86,7 @@ namespace StandUp
         }
     }
 
-    /// <summary>Asks for the current passcode. Used before closing the app.</summary>
+    /// <summary>Asks for the current passcode. Used before Settings and before closing the app.</summary>
     sealed class PasscodeForm : Form
     {
         public PasscodeForm(AppSettings settings, string prompt)
@@ -79,7 +96,7 @@ namespace StandUp
             TextBox box = Ui.Secret();
             box.Width = 260;
             var error = new Label { AutoSize = true, ForeColor = Color.Firebrick, Text = " " };
-            FlowLayoutPanel buttons = Ui.Buttons(this, "OK", true);
+            FlowLayoutPanel buttons = Ui.Buttons(this, L10n.T("common.ok"), true);
 
             grid.Controls.Add(Ui.Label(prompt));
             grid.Controls.Add(box);
@@ -94,7 +111,7 @@ namespace StandUp
                     DialogResult = DialogResult.OK;
                     return;
                 }
-                error.Text = "That passcode is not right.";
+                error.Text = L10n.T("passcode.wrong");
                 box.SelectAll();
                 box.Focus();
             };
@@ -108,40 +125,35 @@ namespace StandUp
 
         public SetPasscodeForm(AppSettings settings, string intro)
         {
-            Ui.Dialog(this, "StandUp passcode");
+            Ui.Dialog(this, L10n.T("passcode.title"));
             TableLayoutPanel grid = Ui.Grid(2);
             TextBox current = Ui.Secret(), first = Ui.Secret(), second = Ui.Secret();
             var error = new Label { AutoSize = true, ForeColor = Color.Firebrick, Text = " " };
 
-            var introLabel = new Label { Text = intro, AutoSize = true, MaximumSize = new Size(360, 0), Margin = new Padding(3, 3, 3, 10) };
-            grid.Controls.Add(introLabel);
-            grid.SetColumnSpan(introLabel, 2);
+            var introLabel = new Label { Text = intro, AutoSize = true, MaximumSize = new Size(380, 0), Margin = new Padding(3, 3, 3, 10) };
+            Ui.Span(grid, introLabel);
 
             if (settings.HasPasscode)
             {
-                grid.Controls.Add(Ui.Label("Current passcode"));
+                grid.Controls.Add(Ui.Label(L10n.T("passcode.current")));
                 grid.Controls.Add(current);
             }
-            grid.Controls.Add(Ui.Label("New passcode"));
+            grid.Controls.Add(Ui.Label(L10n.T("passcode.new")));
             grid.Controls.Add(first);
-            grid.Controls.Add(Ui.Label("Type it again"));
+            grid.Controls.Add(Ui.Label(L10n.T("passcode.again")));
             grid.Controls.Add(second);
-            grid.Controls.Add(error);
-            grid.SetColumnSpan(error, 2);
-
-            FlowLayoutPanel buttons = Ui.Buttons(this, "Save", true);
-            grid.Controls.Add(buttons);
-            grid.SetColumnSpan(buttons, 2);
+            Ui.Span(grid, error);
+            Ui.Span(grid, Ui.Buttons(this, L10n.T("common.save"), true));
             Controls.Add(grid);
 
             ((Button)AcceptButton).Click += delegate
             {
                 if (settings.HasPasscode && !settings.CheckPasscode(current.Text))
-                    error.Text = "The current passcode is not right.";
+                    error.Text = L10n.T("passcode.currentWrong");
                 else if (first.Text.Length < MinimumLength)
-                    error.Text = "Use at least " + MinimumLength + " characters.";
+                    error.Text = L10n.T("passcode.tooShort", MinimumLength);
                 else if (first.Text != second.Text)
-                    error.Text = "The two new passcodes don't match.";
+                    error.Text = L10n.T("passcode.mismatch");
                 else
                 {
                     settings.SetPasscode(first.Text);
@@ -157,67 +169,62 @@ namespace StandUp
         readonly AppSettings _settings;
         readonly Button _lockButton;
         readonly Label _lockStatus;
-        readonly Label _photoStatus;
 
         public SettingsForm(AppSettings settings)
         {
             _settings = settings;
-            Ui.Dialog(this, "StandUp settings");
+            Ui.Dialog(this, L10n.T("settings.title"));
             TableLayoutPanel grid = Ui.Grid(2);
 
-            NumericUpDown work = Minutes(settings.WorkMinutes, 1, 480, 0);
-            NumericUpDown pause = Minutes(settings.BreakMinutes, 0.5m, 60, 1);
-            NumericUpDown snooze = Minutes(settings.SnoozeMinutes, 0.5m, 60, 1);
+            NumericUpDown shortEvery = Ui.Minutes(settings.WorkMinutes, 1, 480, 0);
+            NumericUpDown shortLength = Ui.Minutes(settings.BreakMinutes, 0.5m, 60, 1);
+            NumericUpDown longEvery = Ui.Minutes(settings.LongEveryMinutes, 1, 480, 0);
+            NumericUpDown longLength = Ui.Minutes(settings.LongBreakMinutes, 0.5m, 60, 1);
+            NumericUpDown snooze = Ui.Minutes(settings.SnoozeMinutes, 0.5m, 60, 1);
 
-            grid.Controls.Add(Ui.Label("Work time (minutes)"));
-            grid.Controls.Add(work);
-            grid.Controls.Add(Ui.Label("Break time (minutes)"));
-            grid.Controls.Add(pause);
-            grid.Controls.Add(Ui.Label("Snooze time (minutes)"));
+            grid.Controls.Add(Ui.Label(L10n.T("settings.shortEvery")));
+            grid.Controls.Add(shortEvery);
+            grid.Controls.Add(Ui.Label(L10n.T("settings.shortLength")));
+            grid.Controls.Add(shortLength);
+            grid.Controls.Add(Ui.Label(L10n.T("settings.longEvery")));
+            grid.Controls.Add(longEvery);
+            grid.Controls.Add(Ui.Label(L10n.T("settings.longLength")));
+            grid.Controls.Add(longLength);
+            grid.Controls.Add(Ui.Label(L10n.T("settings.snooze")));
             grid.Controls.Add(snooze);
 
-            var autostart = new CheckBox { Text = "Start with Windows", AutoSize = true, Checked = settings.StartWithWindows, Margin = new Padding(3, 10, 3, 3) };
-            Span(grid, autostart);
+            var autostart = new CheckBox { Text = L10n.T("settings.autostartWindows"), AutoSize = true, Checked = settings.StartWithWindows, Margin = new Padding(3, 10, 3, 3) };
+            Ui.Span(grid, autostart);
 
-            var passcode = new Button { Text = "Change passcode...", AutoSize = true, Margin = new Padding(3, 12, 3, 3) };
+            var buttonsRow = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
+            var passcode = new Button { Text = L10n.T("settings.changePasscode"), AutoSize = true };
             passcode.Click += delegate
             {
-                using (var dialog = new SetPasscodeForm(_settings, "Choose the passcode needed to close StandUp."))
+                using (var dialog = new SetPasscodeForm(_settings, L10n.T("passcode.changeIntro")))
                     dialog.ShowDialog(this);
             };
-            Span(grid, passcode);
+            var advanced = new Button { Text = L10n.T("settings.advanced"), AutoSize = true };
+            advanced.Click += delegate { OpenAdvanced(); };
+            buttonsRow.Controls.Add(passcode);
+            buttonsRow.Controls.Add(advanced);
+            Ui.Span(grid, buttonsRow);
 
-            _photoStatus = new Label { AutoSize = true, Margin = new Padding(3, 14, 3, 3) };
-            var addPhotos = new Button { Text = "Add pictures...", AutoSize = true };
-            addPhotos.Click += delegate { AddPictures(); };
-            var openPhotos = new LinkLabel { Text = "Open my pictures folder", AutoSize = true, Margin = new Padding(3, 6, 3, 3) };
-            openPhotos.LinkClicked += delegate
-            {
-                // This dialog stays on top otherwise and would hide the folder window.
-                TopMost = false;
-                System.IO.Directory.CreateDirectory(Paths.Photos);
-                Process.Start("explorer.exe", "\"" + Paths.Photos + "\"");
-            };
-            Span(grid, _photoStatus);
-            Span(grid, addPhotos);
-            Span(grid, openPhotos);
-            RefreshPhotoRow();
-
-            _lockStatus = new Label { AutoSize = true, Margin = new Padding(3, 14, 3, 3), MaximumSize = new Size(360, 0) };
+            _lockStatus = new Label { AutoSize = true, Margin = new Padding(3, 14, 3, 3), MaximumSize = new Size(400, 0) };
             _lockButton = new Button { AutoSize = true };
             _lockButton.Click += delegate { InstallLockScreenTimer(); };
-            Span(grid, _lockStatus);
-            Span(grid, _lockButton);
+            Ui.Span(grid, _lockStatus);
+            Ui.Span(grid, _lockButton);
             RefreshLockScreenRow();
 
-            FlowLayoutPanel buttons = Ui.Buttons(this, "Save", true);
-            Span(grid, buttons);
+            Ui.Span(grid, Ui.Buttons(this, L10n.T("common.save"), true));
             Controls.Add(grid);
 
             ((Button)AcceptButton).Click += delegate
             {
-                settings.WorkMinutes = work.Value;
-                settings.BreakMinutes = pause.Value;
+                settings.WorkMinutes = shortEvery.Value;
+                settings.BreakMinutes = shortLength.Value;
+                settings.LongEveryMinutes = longEvery.Value;
+                settings.LongBreakMinutes = longLength.Value;
                 settings.SnoozeMinutes = snooze.Value;
                 settings.StartWithWindows = autostart.Checked;
                 settings.Save();
@@ -225,55 +232,27 @@ namespace StandUp
             };
         }
 
-        static void Span(TableLayoutPanel grid, Control control)
-        {
-            grid.Controls.Add(control);
-            grid.SetColumnSpan(control, 2);
-        }
+        /// <summary>Set when Advanced settings switched language; Settings then closes to reopen in it.</summary>
+        public bool LanguageChanged { get; private set; }
 
-        static NumericUpDown Minutes(decimal value, decimal min, decimal max, int decimals)
+        void OpenAdvanced()
         {
-            return new NumericUpDown
+            using (var advanced = new AdvancedForm(_settings))
             {
-                Minimum = min,
-                Maximum = max,
-                DecimalPlaces = decimals,
-                Increment = decimals == 0 ? 1 : 0.5m,
-                Value = Math.Min(max, Math.Max(min, value)),
-                Width = 80
-            };
-        }
-
-        void RefreshPhotoRow()
-        {
-            _photoStatus.Text = "Picture pool: " + PhotoPool.BuiltInCount + " built-in, " + PhotoPool.UserCount + " of yours";
-        }
-
-        void AddPictures()
-        {
-            using (var picker = new OpenFileDialog
-            {
-                Title = "Add pictures to the pool",
-                Multiselect = true,
-                Filter = "Pictures|" + PhotoPool.FileDialogPattern
-            })
-            {
-                if (picker.ShowDialog(this) != DialogResult.OK) return;
-
-                string[] rejected = PhotoPool.AddFiles(picker.FileNames);
-                RefreshPhotoRow();
-                if (rejected.Length > 0)
-                    MessageBox.Show(this, "Windows couldn't read these, so they weren't added:\n\n" + string.Join("\n", rejected), "StandUp", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                if (advanced.ShowDialog(this) != DialogResult.OK || !advanced.LanguageChanged) return;
             }
+            LanguageChanged = true;
+            DialogResult = DialogResult.Retry;
         }
 
         void RefreshLockScreenRow()
         {
-            // Only offered while it's missing. Once on, it stays on and takes no space here.
+            // Hidden once it's on and up to date. Offered again if a newer StandUp needs to update it.
             bool installed = LockScreenTimer.IsInstalled;
-            _lockStatus.Visible = _lockButton.Visible = !installed;
-            _lockStatus.Text = "Lock-screen timer is off. Turning it on needs administrator approval once.";
-            _lockButton.Text = "Turn on lock-screen timer";
+            bool current = installed && LockScreenTimer.IsCurrent;
+            _lockStatus.Visible = _lockButton.Visible = !current;
+            _lockStatus.Text = L10n.T(installed ? "settings.lockOutdated" : "settings.lockOff");
+            _lockButton.Text = L10n.T(installed ? "settings.lockUpdate" : "settings.lockOn");
         }
 
         void InstallLockScreenTimer()
@@ -284,14 +263,91 @@ namespace StandUp
                 {
                     process.WaitForExit();
                     if (process.ExitCode != 0)
-                        MessageBox.Show(this, "That didn't work (error " + process.ExitCode + ").", "StandUp", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        MessageBox.Show(this, L10n.T("settings.lockFailed", process.ExitCode), "StandUp", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
             catch (Win32Exception)
             {
                 // The user declined the administrator prompt.
             }
+            LockScreenTimer.Forget();
             RefreshLockScreenRow();
+        }
+    }
+
+    sealed class AdvancedForm : Form
+    {
+        readonly Label _photoStatus;
+
+        public AdvancedForm(AppSettings settings)
+        {
+            Ui.Dialog(this, L10n.T("advanced.title"));
+            TableLayoutPanel grid = Ui.Grid(2);
+
+            NumericUpDown idle = Ui.Minutes(settings.IdleMinutes, 1, 60, 0);
+            grid.Controls.Add(Ui.Label(L10n.T("advanced.idle")));
+            grid.Controls.Add(idle);
+
+            var language = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140 };
+            foreach (string code in L10n.Languages) language.Items.Add(L10n.NameOf(code));
+            language.SelectedIndex = Math.Max(0, Array.IndexOf(L10n.Languages, settings.Language));
+            grid.Controls.Add(Ui.Label(L10n.T("advanced.language")));
+            grid.Controls.Add(language);
+
+            _photoStatus = new Label { AutoSize = true, Margin = new Padding(3, 16, 3, 3) };
+            var addPhotos = new Button { Text = L10n.T("advanced.addPictures"), AutoSize = true };
+            addPhotos.Click += delegate { AddPictures(); };
+            var openPhotos = new LinkLabel { Text = L10n.T("advanced.openFolder"), AutoSize = true, Margin = new Padding(3, 6, 3, 3) };
+            openPhotos.LinkClicked += delegate
+            {
+                // This dialog stays on top otherwise and would hide the folder window.
+                TopMost = false;
+                System.IO.Directory.CreateDirectory(Paths.Photos);
+                Process.Start("explorer.exe", "\"" + Paths.Photos + "\"");
+            };
+            Ui.Span(grid, _photoStatus);
+            Ui.Span(grid, addPhotos);
+            Ui.Span(grid, openPhotos);
+            RefreshPhotoRow();
+
+            Ui.Span(grid, Ui.Buttons(this, L10n.T("common.save"), true));
+            Controls.Add(grid);
+
+            ((Button)AcceptButton).Click += delegate
+            {
+                string chosen = L10n.Languages[language.SelectedIndex];
+                LanguageChanged = chosen != settings.Language;
+                settings.IdleMinutes = idle.Value;
+                settings.Language = chosen;
+                settings.Save();
+                L10n.Language = chosen;
+                DialogResult = DialogResult.OK;
+            };
+        }
+
+        public bool LanguageChanged { get; private set; }
+
+        void RefreshPhotoRow()
+        {
+            _photoStatus.Text = L10n.T("advanced.pool", PhotoPool.BuiltInCount, PhotoPool.UserCount);
+        }
+
+        void AddPictures()
+        {
+            using (var picker = new OpenFileDialog
+            {
+                Title = L10n.T("advanced.pickerTitle"),
+                Multiselect = true,
+                Filter = L10n.T("advanced.pickerFilter") + "|" + PhotoPool.FileDialogPattern
+            })
+            {
+                if (picker.ShowDialog(this) != DialogResult.OK) return;
+
+                string[] rejected = PhotoPool.AddFiles(picker.FileNames);
+                RefreshPhotoRow();
+                if (rejected.Length > 0)
+                    MessageBox.Show(this, L10n.T("advanced.rejected") + "\n\n" + string.Join("\n", rejected), "StandUp", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
     }
 
@@ -299,7 +355,7 @@ namespace StandUp
     {
         public HistoryForm(History history)
         {
-            Ui.Dialog(this, "StandUp history");
+            Ui.Dialog(this, L10n.T("history.title"));
             TableLayoutPanel grid = Ui.Grid(1);
 
             float scale = DeviceDpi / 96f;
@@ -314,7 +370,7 @@ namespace StandUp
             foreach (int days in new[] { 14, 30, 90 })
             {
                 int span = days;
-                ranges.Controls.Add(Choice(days + " days", days == 14, delegate { chart.ShowDays(span); }));
+                ranges.Controls.Add(Choice(L10n.T("history.days", days), days == 14, delegate { chart.ShowDays(span); }));
             }
 
             Action<bool, bool> showCharts = (visible, snoozes) =>
@@ -325,9 +381,9 @@ namespace StandUp
                 if (visible) chart.ShowSnoozes(snoozes);
             };
             var views = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Left, Margin = new Padding(0) };
-            views.Controls.Add(Choice("Breaks", true, delegate { showCharts(true, false); }));
-            views.Controls.Add(Choice("Snoozes", false, delegate { showCharts(true, true); }));
-            views.Controls.Add(Choice("Raw data", false, delegate { showCharts(false, false); }));
+            views.Controls.Add(Choice(L10n.T("history.breaks"), true, delegate { showCharts(true, false); }));
+            views.Controls.Add(Choice(L10n.T("history.snoozes"), false, delegate { showCharts(true, true); }));
+            views.Controls.Add(Choice(L10n.T("history.raw"), false, delegate { showCharts(false, false); }));
 
             var header = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Dock = DockStyle.Top, Margin = new Padding(0, 0, 0, 8) };
             header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -335,19 +391,19 @@ namespace StandUp
             header.Controls.Add(views, 0, 0);
             header.Controls.Add(ranges, 1, 0);
 
-            list.Columns.Add("Day", 170);
-            list.Columns.Add("Breaks", 65, HorizontalAlignment.Right);
-            list.Columns.Add("Snoozes", 70, HorizontalAlignment.Right);
-            list.Columns.Add("Minutes", 70, HorizontalAlignment.Right);
+            list.Columns.Add(L10n.T("history.day"), 200);
+            list.Columns.Add(L10n.T("history.colBreaks"), 90, HorizontalAlignment.Right);
+            list.Columns.Add(L10n.T("history.colSnoozes"), 90, HorizontalAlignment.Right);
+            list.Columns.Add(L10n.T("history.colMinutes"), 90, HorizontalAlignment.Right);
 
             foreach (DayStats day in history.NewestFirst.Take(365))
             {
                 list.Items.Add(new ListViewItem(new[]
                 {
-                    day.Date.ToString("ddd, d MMM yyyy", CultureInfo.CurrentCulture),
-                    day.Breaks.ToString(CultureInfo.CurrentCulture),
-                    day.Snoozes.ToString(CultureInfo.CurrentCulture),
-                    (day.BreakSeconds / 60.0).ToString("0.#", CultureInfo.CurrentCulture)
+                    day.Date.ToString("ddd, d MMM yyyy", L10n.Culture),
+                    day.Breaks.ToString(L10n.Culture),
+                    day.Snoozes.ToString(L10n.Culture),
+                    (day.BreakSeconds / 60.0).ToString("0.#", L10n.Culture)
                 }));
             }
 

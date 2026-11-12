@@ -21,6 +21,7 @@ mod imp {
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
         fn CGSessionCopyCurrentDictionary() -> *const c_void;
+        fn CGEventSourceSecondsSinceLastEventType(state: i32, event_type: u32) -> f64;
     }
 
     #[link(name = "CoreFoundation", kind = "framework")]
@@ -156,6 +157,17 @@ return 0"#;
     pub fn open_folder(path: &std::path::Path) {
         let _ = Command::new("open").arg(path).spawn();
     }
+
+    /// Seconds since the last keyboard or mouse input. Needs no permission.
+    pub fn idle_seconds() -> f64 {
+        const COMBINED_SESSION_STATE: i32 = 0;
+        const ANY_INPUT_EVENT: u32 = u32::MAX;
+        unsafe { CGEventSourceSecondsSinceLastEventType(COMBINED_SESSION_STATE, ANY_INPUT_EVENT) }
+    }
+
+    pub fn play_sound(path: &std::path::Path) {
+        let _ = Command::new("afplay").arg(path).spawn();
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -167,9 +179,11 @@ mod imp {
     pub fn lock_screen() {}
     pub fn powerpoint_slide_show_running() -> bool { false }
     pub fn open_folder(_path: &std::path::Path) {}
+    pub fn idle_seconds() -> f64 { 0.0 }
+    pub fn play_sound(_path: &std::path::Path) {}
 }
 
-pub use imp::{activate, enter_kiosk, exit_kiosk, lock_screen, open_folder, powerpoint_slide_show_running, screen_is_locked};
+pub use imp::{activate, enter_kiosk, exit_kiosk, idle_seconds, lock_screen, open_folder, play_sound, powerpoint_slide_show_running, screen_is_locked};
 
 #[cfg(target_os = "macos")]
 pub use imp::raise_window;

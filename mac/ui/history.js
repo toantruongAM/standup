@@ -1,12 +1,8 @@
-const { invoke } = window.__TAURI__.core;
 const content = document.getElementById('content');
 const ranges = document.getElementById('ranges');
 
-const MEASURES = {
-  breaks: { title: 'Breaks per day', unit: 'breaks', value: (d) => d.breaks },
-  snoozes: { title: 'Snoozes per day', unit: 'snoozes', value: (d) => d.snoozes },
-  minutes: { title: 'Break minutes per day', unit: 'minutes', value: (d) => d.break_seconds / 60 },
-};
+// Filled in once the text has loaded.
+let MEASURES = {};
 const VIEWS = { breaks: ['breaks', 'minutes'], snoozes: ['snoozes'] };
 const WIDTH = 684;
 const HEIGHT = 430;
@@ -19,8 +15,9 @@ let view = 'breaks';
 let span = 14;
 
 const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const number = (v) => String(Math.round(v * 10) / 10);
-const shortDate = (d) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+const number = (v) => (Math.round(v * 10) / 10).toLocaleString(LOCALES[LANG]);
+const shortDate = (d) => d.toLocaleDateString(LOCALES[LANG], { day: 'numeric', month: 'short' });
+const longDate = (d) => d.toLocaleDateString(LOCALES[LANG], { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 const escapeText = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
 function days() {
@@ -59,8 +56,8 @@ function drawMeasure(measure, top, height, data, band) {
     return `<path d="${roundedBar(LEFT + i * band + (band - width) / 2, plotBottom - h, width, h)}" fill="var(--bar)"/>`;
   }).join('');
 
-  return `<text class="title" x="6" y="${top + 18}">${measure.title}</text>
-    <text class="note" x="${WIDTH - RIGHT}" y="${top + 18}" text-anchor="end">${number(total)} ${measure.unit} in the last ${span} days</text>
+  return `<text class="title" x="6" y="${top + 18}">${escapeText(measure.title)}</text>
+    <text class="note" x="${WIDTH - RIGHT}" y="${top + 18}" text-anchor="end">${escapeText(t('history.total', number(total), measure.unit, span))}</text>
     <rect class="band" x="0" y="${plotTop}" width="${band}" height="${plotBottom - plotTop}" fill="var(--hover)" visibility="hidden"/>
     <line x1="${LEFT}" x2="${WIDTH - RIGHT}" y1="${plotTop}" y2="${plotTop}" stroke="var(--grid)"/>
     <line x1="${LEFT}" x2="${WIDTH - RIGHT}" y1="${plotBottom}" y2="${plotBottom}" stroke="var(--baseline)"/>
@@ -81,7 +78,7 @@ function drawChart() {
     dates += `<text class="tick" x="${center}" y="${HEIGHT - 7}" text-anchor="middle">${shortDate(data[i].date)}</text>`;
   }
 
-  content.innerHTML = `<svg width="${WIDTH}" height="${HEIGHT}" role="img" aria-label="Chart of ${measures.map((m) => m.title).join(' and ')}. The same numbers are under Raw data.">
+  content.innerHTML = `<svg width="${WIDTH}" height="${HEIGHT}" role="img" aria-label="${escapeText(t('history.chartLabel'))}">
     ${measures.map((m, i) => drawMeasure(m, i * panel, panel, data, band)).join('')}${dates}</svg><div id="tip"></div>`;
 
   const svg = content.querySelector('svg');
@@ -98,8 +95,8 @@ function drawChart() {
     tip.style.display = valid ? 'block' : 'none';
     if (!valid) return;
     const d = data[index];
-    tip.innerHTML = `<b>${d.date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</b>
-      Breaks: ${d.breaks}<br>Snoozes: ${d.snoozes}<br>Minutes: ${number(d.break_seconds / 60)}`;
+    tip.innerHTML = `<b>${escapeText(longDate(d.date))}</b>
+      ${escapeText(t('history.colBreaks'))}: ${d.breaks}<br>${escapeText(t('history.colSnoozes'))}: ${d.snoozes}<br>${escapeText(t('history.colMinutes'))}: ${number(d.break_seconds / 60)}`;
     const after = LEFT + (index + 1) * band + 6;
     tip.style.left = `${after + tip.offsetWidth > WIDTH ? LEFT + index * band - tip.offsetWidth - 6 : after}px`;
     tip.style.top = '34px';
@@ -112,10 +109,11 @@ function drawChart() {
 
 function drawTable() {
   const rows = [...byDate.values()].reverse().map((d) => {
-    const label = new Date(`${d.date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    const label = longDate(new Date(`${d.date}T12:00:00`));
     return `<tr><td>${escapeText(label)}</td><td>${d.breaks}</td><td>${d.snoozes}</td><td>${number(d.break_seconds / 60)}</td></tr>`;
   }).join('');
-  content.innerHTML = `<table><thead><tr><th>Day</th><th>Breaks</th><th>Snoozes</th><th>Minutes</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const head = ['history.day', 'history.colBreaks', 'history.colSnoozes', 'history.colMinutes'].map((k) => `<th>${escapeText(t(k))}</th>`).join('');
+  content.innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function draw() {
@@ -142,7 +140,14 @@ ranges.addEventListener('click', (event) => {
   draw();
 });
 
-invoke('history_days').then((list) => {
+loadStrings().then(async () => {
+  MEASURES = {
+    breaks: { title: t('history.breaksPerDay'), unit: t('history.unitBreaks'), value: (d) => d.breaks },
+    snoozes: { title: t('history.snoozesPerDay'), unit: t('history.unitSnoozes'), value: (d) => d.snoozes },
+    minutes: { title: t('history.minutesPerDay'), unit: t('history.unitMinutes'), value: (d) => d.break_seconds / 60 },
+  };
+  ranges.querySelectorAll('button').forEach((b) => { b.textContent = t('history.days', b.dataset.days); });
+  const list = await invoke('history_days');
   byDate = new Map(list.map((d) => [d.date, d]));
   draw();
 });

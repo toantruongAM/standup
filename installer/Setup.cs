@@ -10,8 +10,8 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("StandUp Setup")]
 [assembly: AssemblyProduct("StandUp")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace StandUpSetup
 {
@@ -19,7 +19,7 @@ namespace StandUpSetup
     static class Installer
     {
         public const string Title = "StandUp Setup";
-        const string Version = "1.0.0";
+        const string Version = "1.1.0";
         const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\StandUp";
         const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
@@ -157,7 +157,7 @@ namespace StandUpSetup
             grid.Controls.Add(new Label { Text = "Install StandUp", AutoSize = true, Font = new Font(SystemFonts.MessageBoxFont.FontFamily, 13f, FontStyle.Bold), Margin = new Padding(3, 3, 3, 8) });
             grid.Controls.Add(new Label
             {
-                Text = "StandUp locks your screen for a short walk every 50 minutes. You'll choose a passcode when it first opens.\n\nIt installs for your account only and starts with Windows.",
+                Text = "StandUp locks your screen for a short walk every hour, and a longer one every 3 hours. You'll choose a passcode when it first opens.\n\nIt installs for your account only and starts with Windows. English, Español and Tiếng Việt are included.",
                 AutoSize = true,
                 MaximumSize = new Size(380, 0),
                 Margin = new Padding(3, 3, 3, 14)

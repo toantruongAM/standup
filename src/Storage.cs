@@ -36,9 +36,13 @@ namespace StandUp
     {
         const int Iterations = 100000;
 
-        public decimal WorkMinutes = 50;
+        public decimal WorkMinutes = 60;
         public decimal BreakMinutes = 2;
+        public decimal LongEveryMinutes = 180;
+        public decimal LongBreakMinutes = 10;
         public decimal SnoozeMinutes = 2;
+        public decimal IdleMinutes = 5;
+        public string Language = "";
         public bool StartWithWindows = true;
         public string PasscodeSalt = "";
         public string PasscodeHash = "";
@@ -51,6 +55,8 @@ namespace StandUp
             {
                 WorkSeconds = (int)(WorkMinutes * 60),
                 BreakSeconds = (int)(BreakMinutes * 60),
+                LongEverySeconds = (int)(LongEveryMinutes * 60),
+                LongBreakSeconds = (int)(LongBreakMinutes * 60),
                 SnoozeSeconds = (int)(SnoozeMinutes * 60)
             };
         }
@@ -82,7 +88,11 @@ namespace StandUp
         public static AppSettings Load()
         {
             var settings = new AppSettings();
-            if (!File.Exists(Paths.Settings)) return settings;
+            if (!File.Exists(Paths.Settings))
+            {
+                settings.Language = L10n.DefaultLanguage();
+                return settings;
+            }
 
             foreach (string line in File.ReadAllLines(Paths.Settings))
             {
@@ -95,11 +105,16 @@ namespace StandUp
                     case "work": settings.WorkMinutes = ParseMinutes(value, settings.WorkMinutes); break;
                     case "break": settings.BreakMinutes = ParseMinutes(value, settings.BreakMinutes); break;
                     case "snooze": settings.SnoozeMinutes = ParseMinutes(value, settings.SnoozeMinutes); break;
+                    case "longEvery": settings.LongEveryMinutes = ParseMinutes(value, settings.LongEveryMinutes); break;
+                    case "longBreak": settings.LongBreakMinutes = ParseMinutes(value, settings.LongBreakMinutes); break;
+                    case "idle": settings.IdleMinutes = ParseMinutes(value, settings.IdleMinutes); break;
+                    case "lang": settings.Language = value; break;
                     case "autostart": settings.StartWithWindows = value == "1"; break;
                     case "salt": settings.PasscodeSalt = value; break;
                     case "hash": settings.PasscodeHash = value; break;
                 }
             }
+            if (!L10n.Languages.Contains(settings.Language)) settings.Language = L10n.DefaultLanguage();
             return settings;
         }
 
@@ -117,6 +132,10 @@ namespace StandUp
                 "work=" + WorkMinutes.ToString(CultureInfo.InvariantCulture),
                 "break=" + BreakMinutes.ToString(CultureInfo.InvariantCulture),
                 "snooze=" + SnoozeMinutes.ToString(CultureInfo.InvariantCulture),
+                "longEvery=" + LongEveryMinutes.ToString(CultureInfo.InvariantCulture),
+                "longBreak=" + LongBreakMinutes.ToString(CultureInfo.InvariantCulture),
+                "idle=" + IdleMinutes.ToString(CultureInfo.InvariantCulture),
+                "lang=" + Language,
                 "autostart=" + (StartWithWindows ? "1" : "0"),
                 "salt=" + PasscodeSalt,
                 "hash=" + PasscodeHash
@@ -254,8 +273,10 @@ namespace StandUp
 
         static IEnumerable<string> BuiltInNames()
         {
+            // Built-in pictures have their captions in each language: photo.<language>.<name>.png
+            string prefix = ResourcePrefix + L10n.Language + ".";
             return Assembly.GetExecutingAssembly().GetManifestResourceNames()
-                .Where(n => n.StartsWith(ResourcePrefix, StringComparison.Ordinal));
+                .Where(n => n.StartsWith(prefix, StringComparison.Ordinal));
         }
 
         public Bitmap Next()

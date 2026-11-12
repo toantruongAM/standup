@@ -2,38 +2,38 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>StandUp settings</title>
+<title>StandUp</title>
 <link rel="stylesheet" href="common.css">
 </head>
 <body>
 <form id="form">
-  <label class="row">Work time (minutes) <input id="work" type="number" min="1" max="480" step="1"></label>
-  <label class="row">Break time (minutes) <input id="rest" type="number" min="0.5" max="60" step="0.5"></label>
-  <label class="row">Snooze time (minutes) <input id="snoozeTime" type="number" min="0.5" max="60" step="0.5"></label>
-  <label><input id="autostart" type="checkbox"> Start when I log in</label>
+  <label class="row"><span data-i18n="settings.shortEvery"></span> <input id="work" type="number" min="1" max="480" step="1"></label>
+  <label class="row"><span data-i18n="settings.shortLength"></span> <input id="rest" type="number" min="0.5" max="60" step="0.5"></label>
+  <label class="row"><span data-i18n="settings.longEvery"></span> <input id="longEvery" type="number" min="1" max="480" step="1"></label>
+  <label class="row"><span data-i18n="settings.longLength"></span> <input id="longRest" type="number" min="0.5" max="60" step="0.5"></label>
+  <label class="row"><span data-i18n="settings.snooze"></span> <input id="snoozeTime" type="number" min="0.5" max="60" step="0.5"></label>
+  <label><input id="autostart" type="checkbox"> <span data-i18n="settings.autostartMac"></span></label>
 
   <div class="section">
-    <p id="pool"></p>
-    <button type="button" id="add">Add pictures...</button>
-    <input id="picker" type="file" accept="image/*,.heic" multiple hidden>
-    <button type="button" id="open" class="link">Open my pictures folder</button>
+    <button type="button" id="advanced" data-i18n="settings.advanced"></button>
   </div>
 
   <details class="section">
-    <summary>Change passcode</summary>
+    <summary data-i18n="passcode.changeTitle"></summary>
     <p></p>
-    <input id="current" type="password" placeholder="Current passcode">
-    <input id="next" type="password" placeholder="New passcode">
-    <input id="again" type="password" placeholder="Type it again">
-    <button type="button" id="change">Change passcode</button>
+    <input id="current" type="password" data-i18n-placeholder="passcode.current">
+    <input id="next" type="password" data-i18n-placeholder="passcode.new">
+    <input id="again" type="password" data-i18n-placeholder="passcode.again">
+    <button type="button" id="change" data-i18n="passcode.changeTitle"></button>
   </details>
 
   <p id="error" class="error section" role="alert"></p>
   <div class="actions">
-    <button type="button" id="cancel">Cancel</button>
-    <button type="submit" class="primary">Save</button>
+    <button type="button" id="cancel" data-i18n="common.cancel"></button>
+    <button type="submit" class="primary" data-i18n="common.save"></button>
   </div>
 </form>
+<script src="common.js"></script>
 <script src="settings.js"></script>
 </body>
 </html>
