@@ -240,32 +240,24 @@ namespace StandUp
 
         void RefreshTray()
         {
-            DateTime now = DateTime.UtcNow;
-            string state;
+            // The hover tip says StandUp is active, never how long until the next break.
+            // While breaks are paused or one is under way, it says that instead.
+            string tip;
             switch (_engine.Phase)
             {
                 case Phase.Break:
-                    state = L10n.T(_engine.IsLongBreak ? "tray.onLongBreak" : "tray.onBreak");
+                    tip = "StandUp: " + L10n.T(_engine.IsLongBreak ? "tray.onLongBreak" : "tray.onBreak");
                     break;
                 case Phase.Paused:
-                    state = L10n.T(_engine.IsPresenting ? "tray.pausedPresenting" : "tray.pausedLocked");
+                    tip = "StandUp: " + L10n.T(_engine.IsPresenting ? "tray.pausedPresenting" : "tray.pausedLocked");
                     break;
                 default:
-                    if (_engine.IsIdle)
-                    {
-                        state = L10n.T("tray.pausedIdle");
-                        break;
-                    }
-                    int minutes = Math.Max(1, (int)Math.Ceiling((_engine.Deadline - now).TotalMinutes));
-                    state = L10n.T(_engine.NextBreakIsLong(now) ? "tray.nextLongBreak" : "tray.nextBreak", minutes);
-                    if (_engine.InSnooze) state += " " + L10n.T("tray.snoozed");
+                    tip = _engine.IsIdle ? "StandUp: " + L10n.T("tray.pausedIdle") : L10n.T("tray.active");
                     break;
             }
 
             _breakNow.Enabled = _engine.Phase == Phase.Working;
 
-            // The status shows only as the icon's hover tip, not in the right-click menu.
-            string tip = "StandUp: " + state;
             if (tip.Length > 63) tip = tip.Substring(0, 63);
             if (_tray.Text != tip) _tray.Text = tip;
         }

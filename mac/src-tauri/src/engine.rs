@@ -101,6 +101,8 @@ impl Engine {
     }
 
     /// Whether the coming break will be a long one, if work carries on until it.
+    /// The app no longer shows it (the tray doesn't count down); the tests still check the rule.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn next_break_is_long(&self, now: i64) -> bool {
         self.worked_ms + (self.deadline - now) >= self.config.long_every_seconds * 1000
     }

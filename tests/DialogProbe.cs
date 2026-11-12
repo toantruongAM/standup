@@ -242,7 +242,9 @@ static class DialogProbe
         string[] items = icon.ContextMenuStrip.Items.Cast<ToolStripItem>().Select(i => i is ToolStripSeparator ? "---" : i.Text).ToArray();
         Console.WriteLine("      tray menu: " + string.Join(" | ", items));
         Check("tray menu shows no status lines", items.SequenceEqual(new[] { "Take a break now", "Settings...", "History...", "---", "Exit..." }));
-        Check("status still shows as the hover tip", icon.Text.StartsWith("StandUp: "));
+        Call(tray, "RefreshTray");
+        Console.WriteLine("      hover tip: " + icon.Text);
+        Check("hover tip says StandUp is active, with no minutes", icon.Text == "StandUp is active" && !icon.Text.Contains("min"));
         Call(tray, "Shutdown");
 
         Check("lock-screen timer code is gone", app.GetType("StandUp.LockScreenTimer") == null && app.GetType("StandUp.LockTimerForm") == null);

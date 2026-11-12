@@ -123,7 +123,7 @@ fn spawn_clock(app: AppHandle) {
             let keep_active = on_break && count % 4 == 0;
 
             let lang = core.lang().to_string();
-            let status = status_text(&core, now);
+            let tooltip = tooltip_text(&core);
             let working = core.engine.phase == Phase::Working;
             drop(core);
 
@@ -142,39 +142,34 @@ fn spawn_clock(app: AppHandle) {
                 let _ = app.run_on_main_thread(platform::activate);
             }
 
-            // The status shows only as the icon's hover tip, not in the menu.
-            let line = format!("{lang}|{status}|{working}");
+            // The state shows only as the icon's hover tip, not in the menu.
+            let line = format!("{lang}|{tooltip}|{working}");
             if line != last_status {
                 last_status = line;
                 let items = app.state::<TrayItems>();
                 let _ = items.take_break.set_enabled(working);
                 if let Some(tray) = app.tray_by_id("standup") {
-                    let _ = tray.set_tooltip(Some(format!("StandUp: {status}")));
+                    let _ = tray.set_tooltip(Some(tooltip));
                 }
             }
         }
     });
 }
 
-fn status_text(core: &Core, now: i64) -> String {
+/// The icon's hover tip: StandUp is active, never how long until the next break.
+/// While breaks are paused or one is under way, it says that instead.
+fn tooltip_text(core: &Core) -> String {
     let lang = core.lang();
     let engine = &core.engine;
-    match engine.phase {
-        Phase::Break if engine.is_long_break => i18n::t(lang, "tray.onLongBreak"),
-        Phase::Break => i18n::t(lang, "tray.onBreak"),
-        Phase::Paused if engine.is_presenting() => i18n::t(lang, "tray.pausedPresenting"),
-        Phase::Paused => i18n::t(lang, "tray.pausedLocked"),
-        Phase::Working if engine.is_idle() => i18n::t(lang, "tray.pausedIdle"),
-        Phase::Working => {
-            let minutes = ((engine.deadline - now) as f64 / 60_000.0).ceil().max(1.0) as i64;
-            let key = if engine.next_break_is_long(now) { "tray.nextLongBreak" } else { "tray.nextBreak" };
-            let mut text = i18n::f(lang, key, &[&minutes.to_string()]);
-            if engine.in_snooze {
-                text = format!("{text} {}", i18n::t(lang, "tray.snoozed"));
-            }
-            text
-        }
-    }
+    let state = match engine.phase {
+        Phase::Break if engine.is_long_break => "tray.onLongBreak",
+        Phase::Break => "tray.onBreak",
+        Phase::Paused if engine.is_presenting() => "tray.pausedPresenting",
+        Phase::Paused => "tray.pausedLocked",
+        Phase::Working if engine.is_idle() => "tray.pausedIdle",
+        Phase::Working => return i18n::t(lang, "tray.active"),
+    };
+    format!("StandUp: {}", i18n::t(lang, state))
 }
 
 fn apply_tray_language(app: &AppHandle, lang: &str) {
