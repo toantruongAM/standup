@@ -57,7 +57,7 @@ mod tests {
     #[test]
     fn placeholders_are_filled() {
         assert_eq!(f("en", "tray.nextBreak", &["7"]), "Next break in 7 min");
-        assert_eq!(f("vi", "tray.breaksToday", &["3"]), "Số lần nghỉ hôm nay: 3");
+        assert_eq!(f("vi", "tray.nextLongBreak", &["3"]), "Nghỉ dài sau 3 phút");
         assert_eq!(t("xx", "common.save"), "Save");
     }
 }
