@@ -5,19 +5,19 @@ A Windows tray app that makes you stop working, stand up and walk. At set times 
 Looking for the Mac version? See [mac/README.md](mac/README.md).
 
 ## Features
-Short and long breaks: a 1-minute walk every hour and a 10-minute break every 3 hours. Both are adjustable.
+- Short and long breaks: a 1-minute walk every hour and a 10-minute break every 3 hours. Both are adjustable.
 
-Breaks you can’t skip: screen is frozen and any key or mouse use restarts the break. Can lock the PC and walk away.
+- Breaks you can’t skip: screen is frozen and any key or mouse use restarts the break. Can lock the PC and walk away.
 
-Snooze: a small, dim “snooze” botton gives you 2 more minutes in case of emergency.
+- Snooze: a small, dim “snooze” botton gives you 2 more minutes in case of emergency.
 
-Pauses on its own: while you’re away, during PowerPoint slide shows, and while the PC is locked or asleep.
+- Pauses on its own: while you’re away, during PowerPoint slide shows, and while the PC is locked or asleep.
 
-Historical data of your breaks over time.
+- Historical data of your breaks over time.
 
-Passcode needed to open Settings or quit.
+- Passcode needed to open Settings or quit.
 
-Available in English, Español and Tiếng Việt.
+- Available in English, Español and Tiếng Việt.
 
 ## Install
 
