@@ -49,13 +49,13 @@ namespace StandUp
             _engine.PhaseChanged += OnPhaseChanged;
             _engine.BreakStarted += isLong =>
             {
-                Chime.BreakStart();
+                Chime.BreakStart(isLong);
                 Log.Write(isLong ? "long break started" : "break started");
             };
             _engine.BreakCompleted += (at, seconds) =>
             {
                 _history.RecordBreak(at, seconds);
-                Chime.BreakEnd();
+                Chime.BreakEnd(_engine.IsLongBreak);   // still set while the break that just ended is reported
                 Log.Write("break completed");
             };
             _engine.Snoozed += at => _history.RecordSnooze(at, _engine.Config.SnoozeSeconds);
@@ -146,7 +146,7 @@ namespace StandUp
 
             bool idle = idleMs >= limitMs;
             if (idle != _engine.IsIdle && _engine.Phase == Phase.Working) Log.Write(idle ? "idle" : "back from idle");
-            _engine.SetIdle(idle, now);
+            _engine.SetIdle(idle, now, now.AddMilliseconds(-idleMs));
         }
 
         void CheckPresenting(DateTime now)
@@ -182,7 +182,8 @@ namespace StandUp
         {
             if (_overlays.Count > 0) return;
 
-            _photo = _photos.Next();
+            // Long breaks get their own pictures of a dog exercising; short ones a funny picture.
+            _photo = (_engine.IsLongBreak ? _photos.NextLong() : null) ?? _photos.Next();
             foreach (Screen screen in Screen.AllScreens)
                 _overlays.Add(new OverlayForm(screen, _photo, _engine, Snooze, _random));
             foreach (OverlayForm overlay in _overlays) overlay.Show();

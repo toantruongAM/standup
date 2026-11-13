@@ -85,8 +85,9 @@ namespace StandUp
     {
         static System.Media.SoundPlayer _player;   // kept so the sound isn't cut off by garbage collection
 
-        public static void BreakStart() { Play("sound.break-start.wav"); }
-        public static void BreakEnd() { Play("sound.break-end.wav"); }
+        // Long breaks have their own chimes, so you can tell them apart without looking.
+        public static void BreakStart(bool longBreak) { Play(longBreak ? "sound.long-break-start.wav" : "sound.break-start.wav"); }
+        public static void BreakEnd(bool longBreak) { Play(longBreak ? "sound.long-break-end.wav" : "sound.break-end.wav"); }
 
         static void Play(string resource)
         {

@@ -211,15 +211,48 @@ fn mime_for(path: &Path) -> Option<&'static str> {
 }
 
 /// Built-in pictures plus anything the user adds.
+/// Long breaks have their own pictures of a dog exercising, with captions in each language.
+macro_rules! long_pictures {
+    ($lang:literal) => {
+        [
+            include_bytes!(concat!("../../../art/long/", $lang, "/jumping-jacks.png")) as &[u8],
+            include_bytes!(concat!("../../../art/long/", $lang, "/push-ups.png")),
+            include_bytes!(concat!("../../../art/long/", $lang, "/side-stretch.png")),
+            include_bytes!(concat!("../../../art/long/", $lang, "/jogging.png")),
+            include_bytes!(concat!("../../../art/long/", $lang, "/barbell.png")),
+            include_bytes!(concat!("../../../art/long/", $lang, "/squats.png")),
+        ]
+    };
+}
+
+const LONG_PICTURES: usize = 6;
+const LONG_BUILT_IN: [[&[u8]; LONG_PICTURES]; 3] = [long_pictures!("en"), long_pictures!("es"), long_pictures!("vi")];
+
 pub struct PhotoPool {
     dir: PathBuf,
     last: Option<usize>,
+    last_long: Option<usize>,
 }
 
 impl PhotoPool {
     pub fn new(dir: PathBuf) -> Self {
         let _ = fs::create_dir_all(&dir);
-        PhotoPool { dir, last: None }
+        PhotoPool { dir, last: None, last_long: None }
+    }
+
+    /// A dog exercising, for a long break, from their own set; never the same one twice in a row.
+    pub fn next_long(&mut self, language: &str) -> String {
+        let set = match language {
+            "es" => &LONG_BUILT_IN[1],
+            "vi" => &LONG_BUILT_IN[2],
+            _ => &LONG_BUILT_IN[0],
+        };
+        let mut pick = (random_u32() as usize) % set.len();
+        if Some(pick) == self.last_long {
+            pick = (pick + 1) % set.len();
+        }
+        self.last_long = Some(pick);
+        format!("data:image/png;base64,{}", STANDARD.encode(set[pick]))
     }
 
     pub fn dir(&self) -> &Path {
@@ -324,6 +357,25 @@ mod tests {
             assert_ne!(next, previous);
             previous = next;
         }
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn long_breaks_get_their_own_pictures_that_never_repeat_back_to_back() {
+        let dir = std::env::temp_dir().join(format!("standup-long-{}", std::process::id()));
+        let mut pool = PhotoPool::new(dir.clone());
+        let short: Vec<String> = BUILT_IN[1].iter().map(|b| format!("data:image/png;base64,{}", STANDARD.encode(b))).collect();
+        let mut previous = String::new();
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..60 {
+            let next = pool.next_long("es");
+            assert!(next.starts_with("data:image/png;base64,iVBORw0KGgo"), "a PNG file");
+            assert!(!short.contains(&next), "not one of the short-break pictures");
+            assert_ne!(next, previous);
+            seen.insert(next.clone());
+            previous = next;
+        }
+        assert_eq!(seen.len(), LONG_PICTURES);
         fs::remove_dir_all(dir).unwrap();
     }
 }

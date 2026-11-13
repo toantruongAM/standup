@@ -143,7 +143,7 @@ namespace StandUp
         {
             if (_showRestarted)
                 DrawText(g, L10n.T("overlay.restarted"), _hintFont, Warning, 0, top, w, height);
-            else
+            else if (!_engine.IsLongBreak)   // long breaks don't restart on input, so they have no status line
                 DrawText(g, L10n.T("overlay.status"), _hintFont, Muted, 0, top, w, height);
         }
 

@@ -32,7 +32,7 @@ impl Default for Config {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Event {
     BreakStarted { long: bool },
-    BreakCompleted { at: i64, seconds: i64 },
+    BreakCompleted { at: i64, seconds: i64, long: bool },
     Snoozed { at: i64, seconds: i64 },
 }
 
@@ -52,6 +52,8 @@ pub struct Engine {
     last_tick: i64,
     paused_at: i64,
     idle_since: i64,
+    /// When the current stretch of work (or snooze) began.
+    work_started: i64,
     /// Work counted since the last long break.
     worked_ms: i64,
     events: Vec<Event>,
@@ -75,6 +77,7 @@ impl Engine {
             last_tick: 0,
             paused_at: 0,
             idle_since: 0,
+            work_started: 0,
             worked_ms: 0,
             events: Vec::new(),
         }
@@ -148,7 +151,8 @@ impl Engine {
 
     /// Any keyboard or mouse use. During a break it restarts the break timer.
     pub fn activity(&mut self, now: i64) {
-        if self.phase != Phase::Break {
+        // A long break runs its full length whatever you touch; only a short break restarts.
+        if self.phase != Phase::Break || self.is_long_break {
             return;
         }
         self.deadline = now + self.current_break_seconds() * 1000;
@@ -156,15 +160,31 @@ impl Engine {
     }
 
     /// Whether nobody has used the computer for a while. Only work time is affected.
+    #[cfg_attr(not(test), allow(dead_code))] // the app passes the last input time (set_idle_since)
     pub fn set_idle(&mut self, idle: bool, now: i64) {
+        self.set_idle_since(idle, now, now);
+    }
+
+    /// Whether nobody has used the Mac for a while, and when they last did. Being away stops both
+    /// work clocks (the one to the next break and the one to the next long break) from the moment
+    /// you left, not just from when the away time was reached.
+    pub fn set_idle_since(&mut self, idle: bool, now: i64, last_input: i64) {
         if idle == self.idle {
             return;
         }
         self.idle = idle;
         if idle {
-            self.idle_since = now;
+            self.idle_since = last_input.min(now);
+            if self.phase == Phase::Working {
+                // Give back the minutes it took to notice you'd gone (only those since work began).
+                let away = now - self.idle_since.max(self.work_started);
+                if away > 0 {
+                    self.deadline += away;
+                    self.worked_ms = (self.worked_ms - away).max(0);
+                }
+            }
         } else if now - self.idle_since >= self.config.long_break_seconds * 1000 {
-            self.worked_ms = 0;
+            self.worked_ms = 0; // away as long as a long break: that counts as one
         }
     }
 
@@ -174,6 +194,7 @@ impl Engine {
         }
         self.snoozes_used += 1;
         self.in_snooze = true;
+        self.work_started = now;
         self.deadline = now + self.config.snooze_seconds * 1000;
         self.phase = Phase::Working;
         self.events.push(Event::Snoozed { at: now, seconds: self.config.snooze_seconds });
@@ -274,6 +295,7 @@ impl Engine {
         self.snoozes_used = 0;
         self.in_snooze = false;
         self.deadline = now + self.config.work_seconds * 1000;
+        self.work_started = now;
         self.phase = Phase::Working;
     }
 
@@ -287,7 +309,7 @@ impl Engine {
     }
 
     fn complete_break(&mut self, at: i64) {
-        self.events.push(Event::BreakCompleted { at, seconds: self.current_break_seconds() });
+        self.events.push(Event::BreakCompleted { at, seconds: self.current_break_seconds(), long: self.is_long_break });
         if self.is_long_break {
             self.worked_ms = 0;
         }
@@ -457,6 +479,35 @@ mod tests {
     }
 
     #[test]
+    fn time_before_being_noticed_away_is_given_back_to_both_clocks() {
+        let mut e = new_engine();
+        let t = run(&mut e, T0, 2600);
+        let t = run(&mut e, t, 300); // no input since T0 + 2600 s
+        e.set_idle_since(true, t, t - 300_000);
+        assert_eq!(e.deadline, T0 + 3_300_000, "break clock");
+        assert_eq!(e.worked_ms, 2_600_000, "long-break clock");
+        let t = run(&mut e, t, 100);
+        e.set_idle(false, t);
+        assert_eq!(e.deadline, T0 + 3_400_000);
+        assert_eq!(e.worked_ms, 2_600_000);
+        let t = run(&mut e, t, 390);
+        assert_eq!(e.phase, Phase::Working);
+        run(&mut e, t, 10);
+        assert_eq!(e.phase, Phase::Break);
+    }
+
+    #[test]
+    fn only_away_time_since_work_began_is_given_back() {
+        let mut e = new_engine();
+        let t = run(&mut e, T0, 3000);
+        let t = run(&mut e, t, 120); // the break
+        let t = run(&mut e, t, 30);
+        e.set_idle_since(true, t, t - 400_000); // last input was during the break
+        assert_eq!(e.deadline, t + 3_000_000);
+        assert_eq!(e.worked_ms, 3_000_000);
+    }
+
+    #[test]
     fn settings_changes_keep_time_worked() {
         let mut e = new_engine();
         let t = run(&mut e, T0, 1200);
@@ -483,7 +534,11 @@ mod tests {
         }
         assert_eq!(short_breaks, 3);
         assert_eq!(e.deadline, t + 600_000);
-        let t = run(&mut e, t, 600);
+        let ends = e.deadline;
+        let t = run(&mut e, t, 300);
+        e.activity(t);
+        assert_eq!(e.deadline, ends, "input must not restart a long break");
+        let t = run(&mut e, t, 300);
         assert_eq!(e.phase, Phase::Working);
         assert!(!e.next_break_is_long(t));
     }

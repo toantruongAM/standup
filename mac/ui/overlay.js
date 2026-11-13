@@ -21,7 +21,8 @@ async function refresh() {
   clock.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   headline.textContent = primary ? t(state.long ? 'overlay.headlineLong' : 'overlay.headline') : t('overlay.secondary');
   statusLine.classList.toggle('warn', state.restarted);
-  statusLine.textContent = t(state.restarted ? 'overlay.restarted' : 'overlay.status');
+  // Long breaks don't restart on input, so they have no status line.
+  statusLine.textContent = state.restarted ? t('overlay.restarted') : state.long ? '' : t('overlay.status');
   snooze.hidden = !(primary && state.can_snooze);
 }
 

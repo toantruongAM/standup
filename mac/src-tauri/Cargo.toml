@@ -1,6 +1,6 @@
 [package]
 name = "standup"
-version = "1.3.0"
+version = "1.4.0"
 description = "Makes you stand up and walk"
 edition = "2021"
 rust-version = "1.77"

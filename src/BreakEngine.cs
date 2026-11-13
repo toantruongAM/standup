@@ -24,7 +24,7 @@ namespace StandUp
         static readonly TimeSpan SleepGap = TimeSpan.FromSeconds(20);
 
         bool _locked, _suspended, _presenting, _pausedBreak, _idle;
-        DateTime _lastTick, _pausedAt, _idleSince;
+        DateTime _lastTick, _pausedAt, _idleSince, _workStarted;   // _workStarted: when the current stretch of work (or snooze) began
         TimeSpan _worked;   // work counted since the last long break
 
         public BreakEngine(EngineConfig config) { Config = config; }
@@ -91,18 +91,43 @@ namespace StandUp
         /// <summary>Any keyboard or mouse use. During a break it restarts the break timer.</summary>
         public void Activity(DateTime now)
         {
-            if (Phase != Phase.Break) return;
+            // A long break runs its full length whatever you touch; only a short break restarts.
+            if (Phase != Phase.Break || IsLongBreak) return;
             Deadline = now.AddSeconds(CurrentBreakSeconds);
             LastActivity = now;
         }
 
         /// <summary>Whether nobody has used the computer for a while. Only work time is affected.</summary>
-        public void SetIdle(bool idle, DateTime now)
+        public void SetIdle(bool idle, DateTime now) { SetIdle(idle, now, now); }
+
+        /// <summary>
+        /// Whether nobody has used the computer for a while, and when they last did. Being away stops
+        /// both work clocks (the one to the next break and the one to the next long break) from the
+        /// moment you left, not just from when the away time was reached.
+        /// </summary>
+        public void SetIdle(bool idle, DateTime now, DateTime lastInput)
         {
             if (idle == _idle) return;
             _idle = idle;
-            if (idle) _idleSince = now;
-            else if (now - _idleSince >= TimeSpan.FromSeconds(Config.LongBreakSeconds)) _worked = TimeSpan.Zero;
+            if (idle)
+            {
+                _idleSince = lastInput < now ? lastInput : now;
+                if (Phase == Phase.Working)
+                {
+                    // Give back the minutes it took to notice you'd gone (only those since work began).
+                    DateTime from = _idleSince > _workStarted ? _idleSince : _workStarted;
+                    TimeSpan away = now - from;
+                    if (away > TimeSpan.Zero)
+                    {
+                        Deadline += away;
+                        _worked = _worked > away ? _worked - away : TimeSpan.Zero;
+                    }
+                }
+            }
+            else if (now - _idleSince >= TimeSpan.FromSeconds(Config.LongBreakSeconds))
+            {
+                _worked = TimeSpan.Zero;   // away as long as a long break: that counts as one
+            }
         }
 
         public bool Snooze(DateTime now)
@@ -110,6 +135,7 @@ namespace StandUp
             if (!CanSnooze) return false;
             SnoozesUsed++;
             InSnooze = true;
+            _workStarted = now;
             Deadline = now.AddSeconds(Config.SnoozeSeconds);
             Phase = Phase.Working;
             Action<DateTime> snoozed = Snoozed;
@@ -200,6 +226,7 @@ namespace StandUp
             SnoozesUsed = 0;
             InSnooze = false;
             Deadline = now.AddSeconds(Config.WorkSeconds);
+            _workStarted = now;
             Phase = Phase.Working;
             RaisePhase();
         }

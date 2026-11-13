@@ -142,6 +142,29 @@ static class EngineTests
         t = Run(e, t, 10);
         Check("break comes after the remaining time", e.Phase == Phase.Break);
 
+        // The 5 minutes it takes to notice you've gone don't count as work either, for both clocks.
+        e = New(out done);
+        t = Run(e, T0, 2600);
+        var workedField = typeof(BreakEngine).GetField("_worked", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        t = Run(e, t, 300);                                   // no input since T0+2600
+        e.SetIdle(true, t, t.AddSeconds(-300));
+        Check("away time is given back to the break clock", e.Deadline == T0.AddSeconds(3000 + 300));
+        Check("away time is given back to the long-break clock", (TimeSpan)workedField.GetValue(e) == TimeSpan.FromSeconds(2600));
+        t = Run(e, t, 100);
+        e.SetIdle(false, t);
+        Check("both clocks stood still while away", e.Deadline == T0.AddSeconds(3400) && (TimeSpan)workedField.GetValue(e) == TimeSpan.FromSeconds(2600));
+        t = Run(e, t, 390);
+        Check("no break 10 s before the remaining work is done", e.Phase == Phase.Working);
+        t = Run(e, t, 10);
+        Check("break comes after the full 50 minutes of real work", e.Phase == Phase.Break);
+
+        e = New(out done);
+        t = Run(e, T0, 3000);
+        t = Run(e, t, 120);                                   // a break, then 30 s of work
+        t = Run(e, t, 30);
+        e.SetIdle(true, t, t.AddSeconds(-400));               // last input was during the break
+        Check("only away time since work began is given back", e.Deadline == t.AddSeconds(3000 - 30 + 30) && (TimeSpan)workedField.GetValue(e) == TimeSpan.FromSeconds(3000));
+
         e = New(out done);
         t = Run(e, T0, 3000);
         e.SetIdle(true, t);
@@ -171,11 +194,15 @@ static class EngineTests
         }
         Check("three short breaks, then a long one (after 3h20m of work)", shortBreaks == 3 && sawLong);
         Check("long break lasts 10 minutes", e.Deadline == t.AddSeconds(600));
-        t = Run(e, t, 590);
+        DateTime longEnds = e.Deadline;
+        t = Run(e, t, 300);
         e.Activity(t);
-        Check("input restarts a long break at 10 minutes", e.Deadline == t.AddSeconds(600));
-        t = Run(e, t, 600);
-        Check("after a long break, next break is short again", e.Phase == Phase.Working && !e.NextBreakIsLong(t));
+        Check("input does not restart a long break", e.Deadline == longEnds && e.LastActivity == DateTime.MinValue);
+        t = Run(e, t, 290);
+        Check("long break still on just before its 10 minutes", e.Phase == Phase.Break);
+        t = Run(e, t, 10);
+        Check("long break ends on time despite input", e.Phase == Phase.Working && done.Count == 4);
+        Check("after a long break, next break is short again", !e.NextBreakIsLong(t));
 
         e = New(out done);
         t = Run(e, T0, 3000);

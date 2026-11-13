@@ -1,9 +1,10 @@
-StandUp 1.3
+StandUp 1.4
 ===========
 Sitting all day is bad for you. Every hour, StandUp freezes your screen for a
 1-minute walking break and shows you a funny picture (24 of them: babies,
 dogs, cats and friends). Every 3 hours of work, the break is a longer one
-(10 minutes). A soft chime plays when a break starts and when it ends.
+(10 minutes), with its own pictures of a dog exercising and its own chimes.
+A soft chime plays when a break starts and when it ends.
 
 Needs Windows 10 or 11. Available in English, Español and Tiếng Việt.
 
@@ -19,7 +20,9 @@ turned on, Windows may block it completely.
 
 
 DURING A BREAK
-- Touching the keyboard or mouse restarts the break timer. Hands off!
+- Short breaks: touching the keyboard or mouse restarts the timer. Hands off!
+- Long breaks: the screen stays covered for the full 10 minutes, but touching
+  the keyboard or mouse doesn't restart the timer.
 - Press Win+L to lock the PC and walk away. The break keeps counting.
 - Need a moment? Look for the small dim "snooze" along the bottom of your main
   screen. It gives you 2 more minutes, and you get 2 snoozes per break
@@ -27,8 +30,9 @@ DURING A BREAK
 
 
 WHEN THE CLOCK STOPS
-- Away from the computer for 5 minutes: the work clock pauses, and carries on
-  from where it stopped when you're back.
+- Away from the computer for 5 minutes: the work clock pauses from the moment
+  you left, for both short and long breaks, and carries on from where it
+  stopped when you're back.
 - Turning on, waking or unlocking the PC starts a fresh work period.
 - PowerPoint slide shows: no breaks until the show ends. Zoom and Teams screen
   sharing are NOT detected.

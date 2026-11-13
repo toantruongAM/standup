@@ -26,6 +26,8 @@ const MIN_PASSCODE: usize = 4;
 const PRESENTING_END_DELAY_MS: i64 = 10_000;
 const START_SOUND: &[u8] = include_bytes!("../../../art/sounds/break-start.wav");
 const END_SOUND: &[u8] = include_bytes!("../../../art/sounds/break-end.wav");
+const LONG_START_SOUND: &[u8] = include_bytes!("../../../art/sounds/long-break-start.wav");
+const LONG_END_SOUND: &[u8] = include_bytes!("../../../art/sounds/long-break-end.wav");
 
 struct Core {
     engine: Engine,
@@ -35,6 +37,8 @@ struct Core {
     photos: PhotoPool,
     start_sound: PathBuf,
     end_sound: PathBuf,
+    long_start_sound: PathBuf,
+    long_end_sound: PathBuf,
     started: bool,
     presenting_seen: i64,
     overlays_up: bool,
@@ -102,17 +106,21 @@ fn spawn_clock(app: AppHandle) {
                 core.engine.set_presenting(false, now);
             }
 
-            let away = platform::idle_seconds() >= core.settings.idle_minutes * 60.0;
-            core.engine.set_idle(away, now);
+            let idle_seconds = platform::idle_seconds();
+            let away = idle_seconds >= core.settings.idle_minutes * 60.0;
+            core.engine.set_idle_since(away, now, now - (idle_seconds * 1000.0) as i64);
 
             core.engine.tick(now);
             let mut sounds = Vec::new();
             for event in core.engine.take_events() {
                 match event {
-                    Event::BreakStarted { .. } => sounds.push(core.start_sound.clone()),
-                    Event::BreakCompleted { at, seconds } => {
+                    // Long breaks have their own chimes, so you can tell them apart without looking.
+                    Event::BreakStarted { long } => {
+                        sounds.push(if long { core.long_start_sound.clone() } else { core.start_sound.clone() })
+                    }
+                    Event::BreakCompleted { at, seconds, long } => {
                         core.history.record(at, "break", seconds);
-                        sounds.push(core.end_sound.clone());
+                        sounds.push(if long { core.long_end_sound.clone() } else { core.end_sound.clone() });
                     }
                     Event::Snoozed { at, seconds } => core.history.record(at, "snooze", seconds),
                 }
@@ -289,6 +297,10 @@ fn lock_screen() {
 fn next_photo(shared: State<'_, Shared>) -> Option<String> {
     let mut core = shared.lock().expect("core lock");
     let lang = core.lang().to_string();
+    // Long breaks get their own pictures of a dog exercising; short ones a funny picture.
+    if core.engine.phase == Phase::Break && core.engine.is_long_break {
+        return Some(core.photos.next_long(&lang));
+    }
     core.photos.next(&lang)
 }
 
@@ -560,6 +572,10 @@ fn build_core(app: &AppHandle) -> Result<Core, Box<dyn std::error::Error>> {
     let end_sound = dir.join("break-end.wav");
     fs::write(&start_sound, START_SOUND)?;
     fs::write(&end_sound, END_SOUND)?;
+    let long_start_sound = dir.join("long-break-start.wav");
+    let long_end_sound = dir.join("long-break-end.wav");
+    fs::write(&long_start_sound, LONG_START_SOUND)?;
+    fs::write(&long_end_sound, LONG_END_SOUND)?;
     Ok(Core {
         engine: Engine::new(settings.engine_config()),
         history: History::load(dir.join("history.csv")),
@@ -568,6 +584,8 @@ fn build_core(app: &AppHandle) -> Result<Core, Box<dyn std::error::Error>> {
         settings_path,
         start_sound,
         end_sound,
+        long_start_sound,
+        long_end_sound,
         started: false,
         presenting_seen: 0,
         overlays_up: false,

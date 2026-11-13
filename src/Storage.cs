@@ -236,11 +236,11 @@ namespace StandUp
     /// <summary>Built-in pictures plus anything the user drops in the photos folder.</summary>
     sealed class PhotoPool
     {
-        const string ResourcePrefix = "photo.";
+        const string ResourcePrefix = "photo.", LongPrefix = "long.";
         static readonly string[] Extensions = { ".png", ".jpg", ".jpeg", ".jfif", ".bmp", ".gif", ".tif", ".tiff", ".webp", ".heic" };
 
         readonly Random _random = new Random();
-        string _last;
+        string _last, _lastLong;
 
         public static string FileDialogPattern { get { return string.Join(";", Extensions.Select(e => "*" + e)); } }
 
@@ -285,6 +285,39 @@ namespace StandUp
             string prefix = ResourcePrefix + L10n.Language + ".";
             return Assembly.GetExecutingAssembly().GetManifestResourceNames()
                 .Where(n => n.StartsWith(prefix, StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// For long breaks: a dog exercising, from their own built-in set (long.&lt;language&gt;.&lt;name&gt;.png),
+        /// never the same one twice in a row. Separate from the short-break pictures. Null if none can be read.
+        /// </summary>
+        public Bitmap NextLong()
+        {
+            string prefix = LongPrefix + L10n.Language + ".";
+            List<string> pool = Assembly.GetExecutingAssembly().GetManifestResourceNames()
+                .Where(n => n.StartsWith(prefix, StringComparison.Ordinal)).ToList();
+            while (pool.Count > 0)
+            {
+                List<string> choices = pool.Count > 1 ? pool.Where(p => p != _lastLong).ToList() : pool;
+                string pick = choices[_random.Next(choices.Count)];
+                Bitmap image = Load(pick);
+                if (image != null)
+                {
+                    _lastLong = pick;
+                    return image;
+                }
+                pool.Remove(pick);
+            }
+            return null;
+        }
+
+        public static int LongCount
+        {
+            get
+            {
+                string prefix = LongPrefix + L10n.Language + ".";
+                return Assembly.GetExecutingAssembly().GetManifestResourceNames().Count(n => n.StartsWith(prefix, StringComparison.Ordinal));
+            }
         }
 
         public Bitmap Next()
@@ -344,7 +377,7 @@ namespace StandUp
         {
             try
             {
-                if (name.StartsWith(ResourcePrefix, StringComparison.Ordinal))
+                if (name.StartsWith(ResourcePrefix, StringComparison.Ordinal) || name.StartsWith(LongPrefix, StringComparison.Ordinal))
                 {
                     using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name))
                     using (var source = new Bitmap(stream))

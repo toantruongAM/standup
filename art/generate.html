@@ -307,6 +307,100 @@ const scenes = [
     lines(['M360,680 q-20,-14 -40,0', 'M820,680 q20,-14 40,0', 'M330,420 l-36,-14', 'M330,470 l-40,0'], 7)
 ];
 
+// Long breaks: their own pictures of a dog exercising, saved as PNGs by art/render-long.ps1.
+// Open with #L1-en. Each scene is a pose function; STILL picks its best moment (a frame of 0 to FRAMES-1).
+const FRAMES = 12;
+const FUR = '#e0a96d', EAR = '#9c6a3a', BELLY = '#f6e6cf';
+const wave = (f) => (1 - Math.cos(2 * Math.PI * f / FRAMES)) / 2;   // 0 -> 1 -> 0 over the loop
+const paw = (x, y, rx = 46) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="22" fill="${FUR}" ${S}/>`;
+const headband = `<path d="M-104,-58 Q0,-100 104,-58" fill="none" stroke="#e63946" stroke-width="24"/>`;
+const sweat = (x, y, o) => `<path d="M${x},${y} q-14,26 0,36 q14,-10 0,-36 Z" fill="#4cc9f0" ${S} stroke-width="4" opacity="${o.toFixed(2)}"/>`;
+const longScenes = [
+  // L1. Jumping jacks
+  (f) => {
+    const k = wave(f), b = -36 * Math.sin(Math.PI * k);
+    const arm = (side) => {
+      const a = (side < 0 ? 110 + 125 * k : 70 - 125 * k) * Math.PI / 180;
+      const sx = 600 + side * 78, sy = 420 + b;
+      return limb(`M${sx},${sy} L${(sx + 165 * Math.cos(a)).toFixed(1)},${(sy + 165 * Math.sin(a)).toFixed(1)}`, FUR, 44);
+    };
+    const leg = (side) => {
+      const fx = 600 + side * (50 + 120 * k), fy = 690 + b * 0.6;
+      return limb(`M${600 + side * 42},${590 + b} L${fx.toFixed(1)},${fy.toFixed(1)}`, FUR, 50) + paw(fx + side * 14, fy + 8);
+    };
+    return floor('#e3f2fd', '#c9a27e', 700) + lines(['M90,180 H300', 'M900,200 H1110', 'M140,260 H260'], 10, '#bbdefb') +
+      leg(-1) + leg(1) + arm(-1) + arm(1) +
+      `<ellipse cx="600" cy="${490 + b}" rx="112" ry="140" fill="${FUR}" ${S}/><ellipse cx="600" cy="${515 + b}" rx="68" ry="100" fill="${BELLY}"/>` +
+      at(600, 300 + b, .9, dogHead({ fur: FUR, ear: EAR, eye: k > .5 ? 'happy' : 'wide', mouth: 'tongue' }) + headband) +
+      (k > .6 ? lines(['M330,330 l-40,-20', 'M870,330 l40,-20'], 8) : '');
+  },
+  // L2. Push-ups, seen from the side
+  (f) => {
+    const d = wave(f), ys = 520 + 95 * d;
+    const elbowX = 430 - 70 * d, elbowY = (ys + 688) / 2;
+    return floor('#fff0f3', '#ffccd5', 690) + `<rect x="200" y="682" width="820" height="26" rx="12" fill="#06d6a0" ${S}/>` +
+      limb(`M870,585 C${930 + 20 * Math.sin(4 * Math.PI * f / FRAMES)},520 950,470 ${985 + 30 * Math.sin(4 * Math.PI * f / FRAMES)},440`, FUR, 32) +
+      limb('M820,610 L880,684', FUR, 50) + limb('M790,615 L840,686', FUR, 50) + paw(900, 690) + paw(860, 692) +
+      limb(`M440,${ys} L840,600`, FUR, 140) +
+      limb(`M455,${ys + 10} L${elbowX + 20},${elbowY} L455,684`, FUR, 46) + paw(440, 692) +
+      at(370, ys - 70, .85, dogHead({ fur: FUR, ear: EAR, eye: d > .5 ? 'tired' : 'wide', mouth: 'tongue' }), -8) +
+      sweat(250, ys - 150, d) + sweat(470, ys - 190, d * .8);
+  },
+  // L3. Side stretch: arms up, leaning left and right
+  (f) => {
+    const lean = 15 * Math.sin(2 * Math.PI * f / FRAMES);
+    const body = limb('M-42,-120 L-62,-8', FUR, 52) + limb('M42,-120 L62,-8', FUR, 52) + paw(-74, 4) + paw(74, 4) +
+      `<ellipse cx="0" cy="-240" rx="108" ry="148" fill="${FUR}" ${S}/><ellipse cx="0" cy="-215" rx="66" ry="104" fill="${BELLY}"/>` +
+      dogHeadAt(0, -430, .85, 'happy') +
+      limb('M-80,-330 Q-150,-480 -26,-590', FUR, 42) + limb('M80,-330 Q150,-480 26,-590', FUR, 42);
+    return floor('#e9f5db', '#a7c957', 700) + `<circle cx="1060" cy="130" r="64" fill="#ffd166"/>` +
+      at(600, 700, 1, body, lean) +
+      lines([lean > 0 ? 'M880,330 q30,40 0,80' : 'M320,330 q-30,40 0,80'], 8);
+  },
+  // L4. Jogging in place, knees up
+  (f) => {
+    const s = Math.sin(2 * Math.PI * f / FRAMES), b = -16 * Math.abs(s);
+    // Drawn in front of the body: a raised knee comes up and out, the shin hanging below it.
+    const leg = (side, lift) => {
+      const hx = 600 + side * 44, hy = 590 + b;
+      const kx = hx + side * 34 * lift, ky = hy + 52 - 46 * lift, fx = kx + side * 2, fy = 690 - 104 * lift;
+      return limb(`M${hx},${hy} L${kx.toFixed(1)},${ky.toFixed(1)} L${fx.toFixed(1)},${fy.toFixed(1)}`, FUR, 50) + paw(fx + side * 8, fy + 8);
+    };
+    const arm = (side, swing) => limb(`M${600 + side * 82},${420 + b} Q${600 + side * 150},${500 + b} ${600 + side * 120},${(560 + b - 90 * swing).toFixed(1)}`, FUR, 42);
+    return floor('#cdeffd', '#90be6d', 700) + `<path d="M0,700 C300,640 900,640 1200,700 Z" fill="#a7c957"/>` +
+      `<circle cx="160" cy="440" r="90" fill="#52b788" ${S}/><rect x="146" y="520" width="28" height="180" fill="#7f5539" ${S}/>` +
+      arm(-1, Math.max(0, -s)) + arm(1, Math.max(0, s)) +
+      `<ellipse cx="600" cy="${490 + b}" rx="110" ry="138" fill="${FUR}" ${S}/><ellipse cx="600" cy="${515 + b}" rx="66" ry="98" fill="${BELLY}"/>` +
+      leg(-1, Math.max(0, s)) + leg(1, Math.max(0, -s)) +
+      at(600, 300 + b, .9, dogHead({ fur: FUR, ear: EAR, eye: 'wide', mouth: 'tongue' }) + headband) +
+      lines(['M420,640 l-50,0', 'M780,640 l50,0', 'M430,600 l-40,-10', 'M770,600 l40,-10'], 7) + sweat(760, 220 + b, .9);
+  }
+];
+longScenes.push(
+  // L5. Lifting a barbell overhead
+  () => floor('#fdf0d5', '#9c6644', 700) + `<rect x="60" y="560" width="140" height="140" rx="10" fill="#6c757d" ${S}/><rect x="1000" y="560" width="140" height="140" rx="10" fill="#6c757d" ${S}/>` +
+    limb('M558,590 L520,690', FUR, 50) + limb('M642,590 L680,690', FUR, 50) + paw(508, 698) + paw(692, 698) +
+    `<ellipse cx="600" cy="490" rx="112" ry="140" fill="${FUR}" ${S}/><ellipse cx="600" cy="515" rx="68" ry="100" fill="${BELLY}"/>` +
+    at(600, 300, .9, dogHead({ fur: FUR, ear: EAR, eye: 'tired', mouth: 'tongue' }) + headband) +
+    limb('M522,420 Q440,330 470,175', FUR, 44) + limb('M678,420 Q760,330 730,175', FUR, 44) +
+    `<path d="M330,160 H870" stroke="${INK}" stroke-width="24" stroke-linecap="round"/><path d="M330,160 H870" stroke="#adb5bd" stroke-width="12" stroke-linecap="round"/>` +
+    [300, 345, 855, 900].map((x) => `<rect x="${x - 18}" y="${x === 345 || x === 855 ? 100 : 80}" width="36" height="${x === 345 || x === 855 ? 120 : 160}" rx="8" fill="#343a40" ${S}/>`).join('') +
+    `<circle cx="470" cy="170" r="26" fill="${FUR}" ${S}/><circle cx="730" cy="170" r="26" fill="${FUR}" ${S}/>` +
+    sweat(800, 300, 1) + sweat(395, 330, 1) + lines(['M560,60 l-10,-30', 'M600,52 V20', 'M640,60 l10,-30'], 8),
+  // L6. A deep squat, arms out in front
+  () => floor('#e0fbfc', '#98c1d9', 700) + `<rect x="250" y="692" width="700" height="24" rx="12" fill="#ee6c4d" ${S}/>` +
+    limb('M560,600 L470,630 L500,690', FUR, 54) + limb('M640,600 L730,630 L700,690', FUR, 54) + paw(488, 698) + paw(712, 698) +
+    `<ellipse cx="600" cy="540" rx="118" ry="120" fill="${FUR}" ${S}/><ellipse cx="600" cy="560" rx="70" ry="82" fill="${BELLY}"/>` +
+    at(600, 360, .9, dogHead({ fur: FUR, ear: EAR, eye: 'tired', mouth: 'tongue' }) + headband) +
+    limb('M512,470 L360,480', FUR, 44) + limb('M688,470 L840,480', FUR, 44) +
+    `<circle cx="352" cy="481" r="26" fill="${FUR}" ${S}/><circle cx="848" cy="481" r="26" fill="${FUR}" ${S}/>` +
+    sweat(770, 300, 1) + lines(['M430,700 l-40,0', 'M770,700 l40,0', 'M600,200 V170'], 8)
+);
+// The moment each animated pose is pictured at: arms up, chest down, leaning, knee up.
+const STILL = [6, 6, 3, 3, 0, 0];
+
+function dogHeadAt(x, y, s, eye) { return at(x, y, s, dogHead({ fur: FUR, ear: EAR, eye, mouth: 'tongue' })); }
+
 // Words inside the pictures, then the captions, per language. '|' splits a caption over two lines.
 const WORDS = {
   en: { steps: 'MY STEPS', butt: 'BUTT ACTIVITY', review1: 'needs to', review2: 'walk more', outside: 'OUTSIDE', mug1: "WORLD'S", mug2: 'BEST SITTER', office: 'OFFICE' },
@@ -395,12 +489,29 @@ const CAPTIONS = {
   ]
 };
 
-// Open with #3 or #3-es: scene number, then language.
-const [sceneText, langText] = location.hash.slice(1).split('-');
+const LONG_CAPTIONS = {
+  en: ['Jumping jacks! Ten more,|then walk it off.', 'Push-ups with me.|You can do one.', 'Reach up high.|Now lean to each side.', 'Jog in place with me.|Knees up!',
+       'Lift with me.|Then go for a walk.', 'Ten squats with me.|Then a quick walk.'],
+  es: ['¡Saltos de tijera! Diez más|y luego a caminar.', 'Flexiones conmigo.|Tú puedes con una.', 'Estírate hacia arriba.|Ahora inclínate a cada lado.', 'Trota en el sitio conmigo.|¡Rodillas arriba!',
+       'Levanta pesas conmigo.|Luego sal a caminar.', 'Diez sentadillas conmigo.|Luego una caminata.'],
+  vi: ['Nhảy dang tay chân! Thêm mười cái|rồi đi bộ nào.', 'Hít đất cùng tui.|Một cái thôi cũng được.', 'Vươn tay lên cao.|Giờ nghiêng sang hai bên.', 'Chạy bộ tại chỗ với tui.|Nâng gối lên!',
+       'Nâng tạ cùng tui.|Rồi đi dạo nhé.', 'Mười cái squat với tui.|Rồi đi dạo một chút.']
+};
+
+// Open with #3 or #3-es (scene number, then language), or #L2-es for long-break picture 2.
+const [sceneText, langText, frameText] = location.hash.slice(1).split('-');
 const lang = CAPTIONS[langText] ? langText : 'en';
 const W = WORDS[lang];
-const n = Math.max(1, Math.min(scenes.length, parseInt(sceneText, 10) || 1));
-document.body.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">${scenes[n-1]()}${caption(CAPTIONS[lang][n-1])}</svg>`;
+let art;
+if (sceneText && sceneText[0] === 'L') {
+  const n = Math.max(1, Math.min(longScenes.length, parseInt(sceneText.slice(1), 10) || 1));
+  const frame = frameText === undefined ? STILL[n - 1] : Math.max(0, Math.min(FRAMES - 1, parseInt(frameText, 10) || 0));
+  art = longScenes[n - 1](frame) + caption(LONG_CAPTIONS[lang][n - 1]);
+} else {
+  const n = Math.max(1, Math.min(scenes.length, parseInt(sceneText, 10) || 1));
+  art = scenes[n - 1]() + caption(CAPTIONS[lang][n - 1]);
+}
+document.body.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">${art}</svg>`;
 
 // Longer translations shrink to fit their space.
 document.querySelectorAll('[data-fit]').forEach((el) => {

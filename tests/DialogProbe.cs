@@ -236,6 +236,65 @@ static class DialogProbe
         Check("all 24 pictures are in the pool (saw " + seen.Count + ")", seen.Count == 24);
         Check("the same picture never shows twice in a row", !repeated);
 
+        // Long breaks: their own six pictures per language, none of them a short-break picture,
+        // never the same twice in a row.
+        foreach (string lang in new[] { "en", "es", "vi" })
+        {
+            T("L10n").GetProperty("Language", Any).SetValue(null, lang);
+            Check("6 long-break pictures in " + lang, (int)T("PhotoPool").GetProperty("LongCount", Any).GetValue(null) == 6);
+        }
+        T("L10n").GetProperty("Language", Any).SetValue(null, "en");
+        Func<Bitmap, string> fingerprint = b =>
+        {
+            var sb = new System.Text.StringBuilder();
+            for (int y = 40; y < b.Height; y += 97) for (int x = 40; x < b.Width; x += 97) sb.Append(b.GetPixel(x, y).ToArgb()).Append(',');
+            return sb.ToString();
+        };
+        var shortPrints = new System.Collections.Generic.HashSet<string>();
+        object shortPool = New("PhotoPool");
+        for (int i = 0; i < 150; i++) using (var b = (Bitmap)Call(shortPool, "Next")) shortPrints.Add(fingerprint(b));
+        object longPool = New("PhotoPool");
+        var longSeen = new System.Collections.Generic.HashSet<string>();
+        string lastLong = null;
+        bool longRepeated = false, overlapsShort = false, allPictures = true;
+        for (int i = 0; i < 60; i++)
+        {
+            using (var b = (Bitmap)Call(longPool, "NextLong"))
+            {
+                allPictures &= b != null && b.Width == 1200 && b.Height == 900;
+                overlapsShort |= shortPrints.Contains(fingerprint(b));
+            }
+            string name = (string)longPool.GetType().GetField("_lastLong", Any).GetValue(longPool);
+            longRepeated |= name == lastLong;
+            lastLong = name;
+            longSeen.Add(name);
+        }
+        Check("long-break pictures are still pictures (" + longSeen.Count + " different seen)", allPictures && longSeen.Count == 6);
+        Check("no long-break picture is also a short-break picture", !overlapsShort && shortPrints.Count == 24);
+        Check("the same long-break picture never shows twice in a row", !longRepeated);
+
+        // Draw a long-break screen off-screen: its own picture, and the status line says input won't restart it.
+        object config = New("EngineConfig");
+        T("EngineConfig").GetField("WorkSeconds").SetValue(config, 10);
+        T("EngineConfig").GetField("LongEverySeconds").SetValue(config, 10);
+        object engine = New("BreakEngine", config);
+        DateTime t0 = DateTime.UtcNow;
+        Call(engine, "Start", t0);
+        for (int s = 1; s <= 12; s++) Call(engine, "Tick", t0.AddSeconds(s));
+        Check("a long break is under way", (bool)T("BreakEngine").GetProperty("IsLongBreak").GetValue(engine) && T("BreakEngine").GetProperty("Phase").GetValue(engine).ToString() == "Break");
+        var longPhoto = (Bitmap)Call(longPool, "NextLong");
+        Action noSnooze = delegate { };
+        var overlay = (Form)Activator.CreateInstance(T("OverlayForm"), Any, null, new object[] { Screen.PrimaryScreen, longPhoto, engine, noSnooze, new Random(1) }, null);
+        IntPtr handle = overlay.Handle;
+        using (var shot = new Bitmap(overlay.ClientSize.Width, overlay.ClientSize.Height))
+        {
+            overlay.DrawToBitmap(shot, new Rectangle(Point.Empty, overlay.ClientSize));
+            shot.Save(Path.Combine(outDir, "long-break-screen.png"), ImageFormat.Png);
+        }
+        overlay.Dispose();
+        longPhoto.Dispose();
+
+
         // The right-click menu: actions only, no "Next break in" or "Breaks today" lines.
         object tray = New("TrayApp", loaded, New("TestOptions"));
         var icon = (NotifyIcon)tray.GetType().GetField("_tray", Any).GetValue(tray);
